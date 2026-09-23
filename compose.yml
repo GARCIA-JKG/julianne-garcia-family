@@ -52,6 +52,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
+      HOSTNAME: 0.0.0.0
       TZ: ${TZ}
       SITE_NAME: ${SITE_NAME}
       POSTGRES_DB: ${POSTGRES_DB}
