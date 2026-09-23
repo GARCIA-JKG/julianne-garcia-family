@@ -16,12 +16,16 @@ export const months = [
   { value: 12, label: "December" }
 ] as const;
 
-export function parseMonthYear(
-  monthValue: unknown,
-  yearValue: unknown
-) {
-  const month = Number(cleanText(monthValue, 2));
-  const year = Number(cleanText(yearValue, 4));
+export function parseMonthYear(value: unknown) {
+  const raw = cleanText(value, 7);
+  const match = /^(\d{4})-(\d{2})$/.exec(raw);
+
+  if (!match) {
+    return { month: null, year: null };
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
 
   return {
     month:
