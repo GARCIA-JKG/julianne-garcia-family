@@ -94,7 +94,7 @@ function route() {
 function shell(content, active = "") {
   const nav = [
     ["memories", "Memories"],
-    ["timeline", "Timeline"],
+    ["timeline", "Family Tree"],
     ["people", "People"],
     ["places", "Places"]
   ];
@@ -345,7 +345,7 @@ async function renderPerson(id) {
     </section>
     ${person.relationships.length ? `
       <div class="relationships">
-        ${person.relationships.map(r => `<a href="#/people/${r.relatedPersonId}"><strong>${escapeHtml(r.relatedName)}</strong> · ${escapeHtml(r.label)}</a>`).join("")}
+        ${person.relationships.map(r => `<a href="#/people/${r.relatedPersonId}"><strong>${escapeHtml(r.relatedName)}</strong></a>`).join("")}
       </div>
     ` : ""}
     <section>
@@ -368,32 +368,59 @@ async function renderPerson(id) {
 }
 
 async function renderTimeline() {
-  shell('<div class="loading">Opening the family timeline…</div>', "timeline");
+  shell('<div class="loading">Opening the Family Tree…</div>', "timeline");
 
-  const { memories } = await api("/memories");
+  const { tree } = await api("/family-tree");
+  const generations = Array.from(
+    { length: tree.generationCount },
+    (_, index) => tree.people.filter(person => person.generation === index)
+  );
 
   shell(`
-    <section class="hero">
-      <p class="eyebrow">THROUGH THE YEARS</p>
-      <h1>Our family timeline</h1>
-      <p>A chronological journey through family memories, milestones, moves, celebrations, and everyday life.</p>
+    <section class="hero family-tree-hero">
+      <p class="eyebrow">OUR FAMILY STORY</p>
+      <h1>Family Tree</h1>
+      <p>Follow the Garcia family across generations. The tree shows names and connections without assigning family titles.</p>
     </section>
-    ${memories.length ? `
-      <div class="archive-timeline">
-        ${memories.map(memory => `
-          <article class="archive-timeline-item">
-            <div class="timeline-date">${escapeHtml(memory.dateLabel || "Date unknown")}</div>
-            <div class="timeline-dot"></div>
-            <div class="timeline-story">
-              <p class="eyebrow">${escapeHtml(memory.place || "PLACE UNKNOWN")}</p>
-              <h2>${escapeHtml(memory.title)}</h2>
-              <p>${escapeHtml(memory.story || "This Memory is waiting for its story.")}</p>
-              <a href="#/memories/${memory.id}">Open Memory →</a>
+
+    ${tree.people.length ? `
+      <div class="family-tree">
+        ${generations.map((people, generationIndex) => `
+          <section class="family-generation">
+            <div class="generation-marker">
+              <span>Generation ${generationIndex + 1}</span>
             </div>
-          </article>
+
+            <div class="generation-people">
+              ${people.map(person => {
+                const connected = tree.connections
+                  .filter(connection => connection.leftId === person.id || connection.rightId === person.id)
+                  .map(connection => connection.leftId === person.id ? connection.rightId : connection.leftId);
+                const branchCount = tree.branches.filter(branch => branch.fromId === person.id).length;
+
+                return `
+                  <a class="family-tree-person" href="#/people/${person.id}">
+                    <div class="family-tree-monogram">${escapeHtml(person.displayName.slice(0,1).toUpperCase())}</div>
+                    <div class="family-tree-person-copy">
+                      <h2>${escapeHtml(person.displayName)}</h2>
+                      ${person.birthLabel || person.deathLabel
+                        ? `<p>${escapeHtml([person.birthLabel, person.deathLabel].filter(Boolean).join(" — "))}</p>`
+                        : ""}
+                      ${person.birthPlace ? `<p>${escapeHtml(person.birthPlace)}</p>` : ""}
+                      <span>
+                        ${person.memoryCount} ${person.memoryCount === 1 ? "Memory" : "Memories"}
+                        ${connected.length ? " · " + connected.length + " connection" + (connected.length === 1 ? "" : "s") : ""}
+                        ${branchCount ? " · " + branchCount + " branch" + (branchCount === 1 ? "" : "es") : ""}
+                      </span>
+                    </div>
+                  </a>
+                `;
+              }).join("")}
+            </div>
+          </section>
         `).join("")}
       </div>
-    ` : '<div class="empty">The timeline starts with the stories your family preserves.</div>'}
+    ` : '<div class="empty">Add people and connect them to begin the family story.</div>'}
   `, "timeline");
 }
 
