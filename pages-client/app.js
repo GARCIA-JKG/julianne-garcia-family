@@ -83,9 +83,14 @@ function route() {
 function shell(content, active = "") {
   const nav = [
     ["memories", "Memories"],
+    ["timeline", "Timeline"],
     ["people", "People"],
     ["places", "Places"]
   ];
+
+  if (currentUser?.role !== "viewer") {
+    nav.push(["contribute", "Share a Memory"]);
+  }
 
   app.innerHTML = `
     <div class="shell">
@@ -98,7 +103,7 @@ function shell(content, active = "") {
           </span>
         </a>
         <nav class="nav">
-          ${nav.map(([href,label]) => `<a class="${active===href?"active":""}" href="#/${href}">${label}</a>`).join("")}
+          ${nav.map(([href,label]) => `<a class="${active===href?"active":""} ${href==="contribute"?"nav-cta":""}" href="#/${href}">${label}</a>`).join("")}
           <button id="signout">Sign out</button>
         </nav>
       </header>
@@ -338,6 +343,301 @@ async function renderPerson(id) {
   `, "people");
 }
 
+async function renderTimeline() {
+  shell('<div class="loading">Opening the family timeline…</div>', "timeline");
+
+  const { memories } = await api("/memories");
+
+  shell(`
+    <section class="hero">
+      <p class="eyebrow">THROUGH THE YEARS</p>
+      <h1>Our family timeline</h1>
+      <p>A chronological journey through family memories, milestones, moves, celebrations, and everyday life.</p>
+    </section>
+    ${memories.length ? `
+      <div class="archive-timeline">
+        ${memories.map(memory => `
+          <article class="archive-timeline-item">
+            <div class="timeline-date">${escapeHtml(memory.dateLabel || "Date unknown")}</div>
+            <div class="timeline-dot"></div>
+            <div class="timeline-story">
+              <p class="eyebrow">${escapeHtml(memory.place || "PLACE UNKNOWN")}</p>
+              <h2>${escapeHtml(memory.title)}</h2>
+              <p>${escapeHtml(memory.story || "This Memory is waiting for its story.")}</p>
+              <a href="#/memories/${memory.id}">Open Memory →</a>
+            </div>
+          </article>
+        `).join("")}
+      </div>
+    ` : '<div class="empty">The timeline starts with the stories your family preserves.</div>'}
+  `, "timeline");
+}
+
+function formatUploadBytes(bytes) {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+async function renderContribute() {
+  if (currentUser?.role === "viewer") {
+    location.hash = "#/memories";
+    return;
+  }
+
+  shell(`
+    <section class="hero contribute-hero">
+      <p class="eyebrow">SHARE A FAMILY MEMORY</p>
+      <h1>Help Julianne learn the story.</h1>
+      <p>Upload photos or video, write what you remember, or record the story in your own voice. Small details matter too.</p>
+    </section>
+
+    <form id="memory-form" class="memory-form">
+      <fieldset>
+        <legend>1. Add photos, video, or a voice</legend>
+
+        <label class="upload-zone">
+          <span class="upload-icon">＋</span>
+          <strong>Choose family media</strong>
+          <span>Photos or videos from your phone or computer</span>
+          <input id="memory-media" type="file" multiple accept="image/*,video/*,.heic,.heif,.avif" />
+        </label>
+
+        <section id="upload-previews" class="upload-preview-section hidden">
+          <div class="upload-preview-heading">
+            <div>
+              <strong id="preview-count">0 items ready</strong>
+              <span>Check these before sharing the Memory.</span>
+            </div>
+            <button type="button" id="clear-media" class="text-button">Clear all</button>
+          </div>
+          <div id="preview-grid" class="upload-preview-grid"></div>
+        </section>
+
+        <div class="voice-controls">
+          <button type="button" id="voice-button" class="button button-secondary">● Record the story in your voice</button>
+          <div id="voice-preview"></div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>2. Tell the story</legend>
+
+        <label>
+          Memory title
+          <input type="text" name="title" required maxlength="180" placeholder="Grandma's graduation, Dad's first car..." />
+        </label>
+
+        <div class="field-grid">
+          <label>
+            About when?
+            <input type="month" name="monthYear" />
+            <small>Month and year are enough.</small>
+          </label>
+
+          <label>
+            City
+            <input type="text" name="locality" maxlength="120" placeholder="Honolulu" />
+          </label>
+
+          <label>
+            State / region
+            <input type="text" name="region" maxlength="120" placeholder="Hawaii" />
+          </label>
+
+          <label>
+            Country
+            <input type="text" name="country" maxlength="120" placeholder="United States" />
+          </label>
+        </div>
+
+        <label>
+          Who is in this memory?
+          <input type="text" name="people" maxlength="1000" placeholder="Grandma, Grandpa, Aunt Maria..." />
+        </label>
+
+        <label>
+          What should Julianne know about this?
+          <textarea name="story" rows="8" maxlength="12000" placeholder="Tell the story the way you would tell it sitting together at the kitchen table..."></textarea>
+        </label>
+      </fieldset>
+
+      <div id="memory-form-message"></div>
+      <button id="memory-submit" type="submit" class="button button-primary">Share this Memory</button>
+    </form>
+  `, "contribute");
+
+  const form = document.querySelector("#memory-form");
+  const input = document.querySelector("#memory-media");
+  const previewSection = document.querySelector("#upload-previews");
+  const previewGrid = document.querySelector("#preview-grid");
+  const previewCount = document.querySelector("#preview-count");
+  const clearButton = document.querySelector("#clear-media");
+  const voiceButton = document.querySelector("#voice-button");
+  const voicePreview = document.querySelector("#voice-preview");
+  const submitButton = document.querySelector("#memory-submit");
+  const message = document.querySelector("#memory-form-message");
+
+  let selectedFiles = [];
+  let previewUrls = [];
+  let recorder = null;
+  let voiceStream = null;
+  let voiceChunks = [];
+  let voiceBlob = null;
+  let voiceUrlValue = null;
+
+  function revokePreviews() {
+    previewUrls.forEach(url => URL.revokeObjectURL(url));
+    previewUrls = [];
+  }
+
+  function renderPreviews() {
+    revokePreviews();
+    previewGrid.innerHTML = "";
+
+    previewSection.classList.toggle("hidden", selectedFiles.length === 0);
+    previewCount.textContent =
+      selectedFiles.length + " " + (selectedFiles.length === 1 ? "item" : "items") + " ready";
+
+    selectedFiles.forEach((file, index) => {
+      const extension = (file.name.split(".").pop() || "").toLowerCase();
+      const canImagePreview = file.type.startsWith("image/") && !["heic","heif"].includes(extension);
+      const canVideoPreview = file.type.startsWith("video/");
+      const url = canImagePreview || canVideoPreview ? URL.createObjectURL(file) : "";
+      if (url) previewUrls.push(url);
+
+      const card = document.createElement("article");
+      card.className = "upload-preview-card";
+      card.innerHTML = `
+        <div class="upload-preview-media">
+          ${canImagePreview
+            ? `<img src="${url}" alt="${escapeHtml(file.name)}" />`
+            : canVideoPreview
+              ? `<video src="${url}" controls muted preload="metadata"></video>`
+              : `<div class="upload-file-fallback"><span>▧</span><strong>${escapeHtml(extension.toUpperCase() || "FILE")}</strong></div>`
+          }
+        </div>
+        <div class="upload-preview-details">
+          <div>
+            <strong title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</strong>
+            <span>${formatUploadBytes(file.size)}</span>
+          </div>
+          <button type="button" class="preview-remove-button" data-remove="${index}">Remove</button>
+        </div>
+      `;
+      previewGrid.appendChild(card);
+    });
+
+    previewGrid.querySelectorAll("[data-remove]").forEach(button => {
+      button.addEventListener("click", () => {
+        selectedFiles.splice(Number(button.dataset.remove), 1);
+        renderPreviews();
+      });
+    });
+  }
+
+  input.addEventListener("change", () => {
+    selectedFiles = Array.from(input.files || []).slice(0, 25);
+    renderPreviews();
+  });
+
+  clearButton.addEventListener("click", () => {
+    selectedFiles = [];
+    input.value = "";
+    renderPreviews();
+  });
+
+  voiceButton.addEventListener("click", async () => {
+    if (recorder && recorder.state === "recording") {
+      recorder.stop();
+      voiceButton.textContent = "● Record the story in your voice";
+      submitButton.disabled = false;
+      return;
+    }
+
+    try {
+      voiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recorder = new MediaRecorder(voiceStream);
+      voiceChunks = [];
+
+      recorder.addEventListener("dataavailable", event => {
+        if (event.data.size > 0) voiceChunks.push(event.data);
+      });
+
+      recorder.addEventListener("stop", () => {
+        voiceBlob = new Blob(voiceChunks, {
+          type: recorder.mimeType || "audio/webm"
+        });
+
+        voiceStream?.getTracks().forEach(track => track.stop());
+        voiceStream = null;
+
+        if (voiceUrlValue) URL.revokeObjectURL(voiceUrlValue);
+        voiceUrlValue = URL.createObjectURL(voiceBlob);
+
+        voicePreview.innerHTML = `
+          <div class="voice-upload-preview">
+            <strong>Voice story ready</strong>
+            <span>Listen before adding it to the Memory.</span>
+            <audio src="${voiceUrlValue}" controls preload="metadata"></audio>
+            <button type="button" id="remove-voice" class="text-button">Remove recording</button>
+          </div>
+        `;
+
+        document.querySelector("#remove-voice")?.addEventListener("click", () => {
+          voiceBlob = null;
+          if (voiceUrlValue) URL.revokeObjectURL(voiceUrlValue);
+          voiceUrlValue = null;
+          voicePreview.innerHTML = "";
+        });
+      });
+
+      recorder.start();
+      voiceButton.textContent = "■ Stop recording";
+      submitButton.disabled = true;
+      message.innerHTML = "";
+    } catch {
+      message.innerHTML = '<div class="error">Microphone access was not available on this device.</div>';
+    }
+  });
+
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    submitButton.disabled = true;
+    submitButton.textContent = "Saving Memory…";
+    message.innerHTML = "";
+
+    const data = new FormData(form);
+    for (const file of selectedFiles) data.append("media", file);
+
+    if (voiceBlob) {
+      data.append(
+        "media",
+        new File([voiceBlob], "family-voice-story.webm", {
+          type: voiceBlob.type || "audio/webm"
+        })
+      );
+    }
+
+    try {
+      await api("/memories", { method: "POST", body: data });
+      selectedFiles = [];
+      renderPreviews();
+      if (voiceUrlValue) URL.revokeObjectURL(voiceUrlValue);
+      voiceUrlValue = null;
+      voiceBlob = null;
+      voicePreview.innerHTML = "";
+      form.reset();
+      message.innerHTML = '<div class="success">Memory saved. It is waiting for a family curator to review it.</div>';
+    } catch (error) {
+      message.innerHTML = '<div class="error">' + escapeHtml(error.message || "Could not save this Memory.") + '</div>';
+    } finally {
+      submitButton.disabled = false;
+      submitButton.textContent = "Share this Memory";
+    }
+  });
+}
+
 async function renderPlaces() {
   shell('<div class="loading">Mapping family history…</div>', "places");
   const { places } = await api("/places");
@@ -399,6 +699,8 @@ async function render() {
 
   try {
     if (section === "memories" && parts[1]) return await renderMemory(parts[1]);
+    if (section === "timeline") return await renderTimeline();
+    if (section === "contribute") return await renderContribute();
     if (section === "people" && parts[1]) return await renderPerson(parts[1]);
     if (section === "people") return await renderPeople();
     if (section === "places") return await renderPlaces();
