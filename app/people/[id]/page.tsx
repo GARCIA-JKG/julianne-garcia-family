@@ -127,7 +127,6 @@ export default async function PersonPage({
                     }
                   >
                     <strong>{relationship.relatedName}</strong>
-                    <span>{relationship.label}</span>
                   </Link>
                 ))}
               </div>
