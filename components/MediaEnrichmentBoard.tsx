@@ -17,6 +17,31 @@ export function MediaEnrichmentBoard({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
 
+  async function archiveMedia(mediaId: string) {
+    if (!window.confirm("Hide this media from the Memory? The original file will remain preserved.")) {
+      return;
+    }
+
+    setBusy(mediaId);
+    setError("");
+
+    const response = await fetch(
+      `/api/admin/memories/${memoryId}/media/${mediaId}`,
+      { method: "DELETE" }
+    );
+
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      setError(result.error ?? "Could not archive media.");
+      setBusy(null);
+      return;
+    }
+
+    setBusy(null);
+    router.refresh();
+  }
+
   async function saveMedia(
     event: FormEvent<HTMLFormElement>,
     mediaId: string
@@ -123,12 +148,22 @@ export function MediaEnrichmentBoard({
               </label>
             )}
 
-            <button
-              className="button button-secondary"
-              disabled={busy === item.id}
-            >
-              {busy === item.id ? "Saving..." : "Save media details"}
-            </button>
+            <div className="media-editor-actions">
+              <button
+                className="button button-secondary"
+                disabled={busy === item.id}
+              >
+                {busy === item.id ? "Saving..." : "Save media details"}
+              </button>
+              <button
+                type="button"
+                className="button button-quiet-danger"
+                disabled={busy === item.id}
+                onClick={() => archiveMedia(item.id)}
+              >
+                Archive from Memory
+              </button>
+            </div>
           </form>
         ))}
       </div>
