@@ -30,8 +30,7 @@ export async function POST(request: Request) {
     const title = cleanText(form.get("title"), 180);
     const story = cleanText(form.get("story"), 12_000);
     const { month, year } = parseMonthYear(
-      form.get("month"),
-      form.get("year")
+      form.get("monthYear")
     );
     const dateLabel = formatMonthYear(month, year);
     const place = parsePlace(
