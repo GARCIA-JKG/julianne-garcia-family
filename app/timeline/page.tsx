@@ -1,45 +1,96 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
-import { listApprovedMemories } from "@/lib/archive";
+import { getFamilyTree } from "@/lib/family-tree";
 
-export const metadata: Metadata = { title: "Timeline" };
+export const metadata: Metadata = { title: "Family Tree" };
 export const dynamic = "force-dynamic";
 
-export default async function TimelinePage() {
+export default async function FamilyTreePage() {
   await requireUser();
-  const memories = await listApprovedMemories();
+  const tree = await getFamilyTree();
+
+  const generations = Array.from(
+    { length: tree.generationCount },
+    (_, index) => tree.people.filter((person) => person.generation === index)
+  );
 
   return (
-    <section className="page-section">
+    <section className="page-section family-tree-page">
       <div className="page-intro">
-        <p className="eyebrow">THROUGH THE YEARS</p>
-        <h1>Our family timeline</h1>
+        <p className="eyebrow">OUR FAMILY STORY</p>
+        <h1>Family Tree</h1>
         <p>
-          A chronological journey through family memories, milestones, moves,
-          celebrations, and everyday life.
+          Follow our family across generations. Names and connections are shown
+          without assigning family titles in the public tree.
         </p>
       </div>
 
-      {memories.length ? (
-        <div className="archive-timeline">
-          {memories.map((memory) => (
-            <article key={memory.id} className="archive-timeline-item">
-              <div className="timeline-date">{memory.dateLabel || "Date unknown"}</div>
-              <div className="timeline-dot" />
-              <div className="timeline-story">
-                <p className="eyebrow">{memory.place || "PLACE UNKNOWN"}</p>
-                <h2>{memory.title}</h2>
-                <p>{memory.story || "This memory is waiting for its story."}</p>
-                <Link className="text-link" href={"/memories/" + memory.id}>Open memory →</Link>
+      {tree.people.length ? (
+        <div className="family-tree">
+          {generations.map((people, index) => (
+            <section className="family-generation" key={index}>
+              <div className="generation-marker">
+                <span>Generation {index + 1}</span>
               </div>
-            </article>
+
+              <div className="generation-people">
+                {people.map((person) => {
+                  const connectedIds = new Set(
+                    tree.connections.flatMap((connection) =>
+                      connection.leftId === person.id
+                        ? [connection.rightId]
+                        : connection.rightId === person.id
+                          ? [connection.leftId]
+                          : []
+                    )
+                  );
+
+                  const descendants = tree.branches.filter(
+                    (branch) => branch.fromId === person.id
+                  ).length;
+
+                  return (
+                    <Link
+                      href={"/people/" + person.id}
+                      className="family-tree-person"
+                      key={person.id}
+                    >
+                      <div className="family-tree-monogram">
+                        {person.displayName.slice(0, 1).toUpperCase()}
+                      </div>
+                      <div className="family-tree-person-copy">
+                        <h2>{person.displayName}</h2>
+                        {(person.birthLabel || person.deathLabel) && (
+                          <p>
+                            {[person.birthLabel, person.deathLabel]
+                              .filter(Boolean)
+                              .join(" — ")}
+                          </p>
+                        )}
+                        {person.birthPlace && <p>{person.birthPlace}</p>}
+                        <span>
+                          {person.memoryCount}{" "}
+                          {person.memoryCount === 1 ? "Memory" : "Memories"}
+                          {connectedIds.size > 0
+                            ? " · " + connectedIds.size + " connection" + (connectedIds.size === 1 ? "" : "s")
+                            : ""}
+                          {descendants > 0
+                            ? " · " + descendants + " branch" + (descendants === 1 ? "" : "es")
+                            : ""}
+                        </span>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </section>
           ))}
         </div>
       ) : (
         <div className="empty-keepsake">
-          <span>1940 → TODAY</span>
-          <h2>The timeline starts with the stories you preserve.</h2>
+          <span>FAMILY TREE</span>
+          <h2>Add people and connect them to begin the family story.</h2>
         </div>
       )}
     </section>
