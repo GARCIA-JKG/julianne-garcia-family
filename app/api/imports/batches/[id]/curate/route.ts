@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { assertSameOrigin, cleanText } from "@/lib/security";
+import {
+  formatMonthYear,
+  geocodePlace,
+  parseMonthYear,
+  parsePlace
+} from "@/lib/date-location";
 
 export const runtime = "nodejs";
 
@@ -17,21 +23,43 @@ export async function POST(
     const body = await request.json();
 
     const itemIds = Array.isArray(body.itemIds)
-      ? Array.from(new Set(body.itemIds.filter((value: unknown): value is string => typeof value === "string"))).slice(0, 100)
+      ? Array.from(
+          new Set(
+            body.itemIds.filter(
+              (value: unknown): value is string =>
+                typeof value === "string"
+            )
+          )
+        ).slice(0, 100)
       : [];
 
     const title = cleanText(body.title, 180);
     const story = cleanText(body.story, 12000);
-    const date = cleanText(body.date, 80);
-    const place = cleanText(body.place, 180);
+    const { month, year } = parseMonthYear(
+      body.month,
+      body.year
+    );
+    const dateLabel = formatMonthYear(month, year);
+    const place = parsePlace(
+      body.locality,
+      body.region,
+      body.country
+    );
     const peopleRaw = cleanText(body.people, 1000);
 
     if (!title || itemIds.length === 0) {
       return NextResponse.json(
-        { error: "Select at least one scan and give the Memory a title." },
+        {
+          error:
+            "Select at least one scan and give the Memory a title."
+        },
         { status: 400 }
       );
     }
+
+    const geo = place.label
+      ? await geocodePlace(place)
+      : null;
 
     const client = await db.connect();
 
@@ -64,29 +92,76 @@ export async function POST(
 
       if (selected.rowCount !== itemIds.length) {
         await client.query("ROLLBACK");
+
         return NextResponse.json(
-          { error: "One or more selected scans are no longer available for curation." },
+          {
+            error:
+              "One or more selected scans are no longer available for curation."
+          },
           { status: 409 }
         );
       }
 
       const memory = await client.query<{ id: string }>(
-        `INSERT INTO memories
-          (title, story, approximate_date_label, place_name, status, created_by)
-         VALUES ($1, $2, $3, $4, 'pending', $5)
-         RETURNING id`,
-        [title, story || null, date || null, place || null, user.id]
+        `INSERT INTO memories (
+          title,
+          story,
+          approximate_date_label,
+          memory_year,
+          memory_month,
+          place_name,
+          locality,
+          region,
+          country,
+          latitude,
+          longitude,
+          status,
+          created_by
+        )
+        VALUES (
+          $1, $2, $3, $4, $5, $6, $7,
+          $8, $9, $10, $11, 'pending', $12
+        )
+        RETURNING id`,
+        [
+          title,
+          story || null,
+          dateLabel,
+          year,
+          month,
+          place.label,
+          place.locality,
+          place.region,
+          place.country,
+          geo?.latitude ?? null,
+          geo?.longitude ?? null,
+          user.id
+        ]
       );
 
       const memoryId = memory.rows[0].id;
 
-      for (let index = 0; index < selected.rows.length; index += 1) {
+      for (
+        let index = 0;
+        index < selected.rows.length;
+        index += 1
+      ) {
         const item = selected.rows[index];
 
         await client.query(
-          `INSERT INTO media
-            (memory_id, kind, original_filename, storage_path, mime_type, bytes, uploaded_by, sort_order)
-           VALUES ($1, 'photo', $2, $3, $4, $5, $6, $7)`,
+          `INSERT INTO media (
+            memory_id,
+            kind,
+            original_filename,
+            storage_path,
+            mime_type,
+            bytes,
+            uploaded_by,
+            sort_order
+          )
+          VALUES (
+            $1, 'photo', $2, $3, $4, $5, $6, $7
+          )`,
           [
             memoryId,
             item.original_filename,
@@ -129,14 +204,19 @@ export async function POST(
 
       await client.query(
         `UPDATE import_items
-         SET status = 'curated', curated_memory_id = $1
+         SET status = 'curated',
+             curated_memory_id = $1
          WHERE batch_id = $2
            AND id = ANY($3::uuid[])`,
         [memoryId, batchId, itemIds]
       );
 
       await client.query("COMMIT");
-      return NextResponse.json({ ok: true, memoryId });
+
+      return NextResponse.json({
+        ok: true,
+        memoryId
+      });
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
@@ -145,6 +225,10 @@ export async function POST(
     }
   } catch (error) {
     console.error("scan curation failed", error);
-    return NextResponse.json({ error: "Could not curate these scans." }, { status: 500 });
+
+    return NextResponse.json(
+      { error: "Could not curate these scans." },
+      { status: 500 }
+    );
   }
 }
