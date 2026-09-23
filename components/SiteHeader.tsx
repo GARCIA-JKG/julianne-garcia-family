@@ -26,6 +26,7 @@ export async function SiteHeader() {
             {user.role !== "viewer" && (
               <Link href="/contribute" className="nav-cta">Share a Memory</Link>
             )}
+            <Link href="/account">Account</Link>
             <LogoutButton />
           </>
         ) : (
