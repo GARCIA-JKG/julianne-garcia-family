@@ -1,6 +1,9 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
+import { createWriteStream } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 
 const allowedImage = new Set([
   "image/jpeg",
@@ -82,8 +85,10 @@ export async function storeUpload(file: File, memoryId: string): Promise<StoredU
 
   const filename = randomUUID() + extensionFor(file);
   const absolutePath = path.join(directory, filename);
-  const bytes = Buffer.from(await file.arrayBuffer());
-  await writeFile(absolutePath, bytes, { flag: "wx" });
+  const source = Readable.fromWeb(file.stream() as never);
+  const destination = createWriteStream(absolutePath, { flags: "wx", mode: 0o640 });
+
+  await pipeline(source, destination);
 
   return {
     kind,
