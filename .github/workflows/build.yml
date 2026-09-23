@@ -28,5 +28,11 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
-      - name: Build
+      - name: Build application
         run: npm run build
+
+      - name: Validate Compose
+        run: docker compose --env-file .env.example config -q
+
+      - name: Build production container
+        run: docker build -t julianne-family:test .
