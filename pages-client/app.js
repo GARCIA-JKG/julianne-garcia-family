@@ -272,6 +272,36 @@ async function renderMemory(id) {
     return `<figure><audio src="${src}" controls preload="metadata"></audio></figure>`;
   }).join("");
 
+  const recollectionForm = currentUser?.role !== "viewer"
+    ? `
+      <form id="recollection-form" class="recollection-form">
+        <div class="recollection-form-heading">
+          <p class="eyebrow">ADD YOUR PERSPECTIVE</p>
+          <h3>I remember this…</h3>
+          <p>Tell the part you remember. Your version can be different from someone else's—that is part of preserving family history.</p>
+        </div>
+
+        <label>
+          What do you remember?
+          <textarea name="story" rows="5" maxlength="8000" placeholder="I was seven and cried because I thought Santa forgot my present..."></textarea>
+        </label>
+
+        <label>
+          About how old were you? <span class="optional">(optional)</span>
+          <input name="ageAtMemory" maxlength="80" placeholder="7 years old, a teenager, about 20..." />
+        </label>
+
+        <div class="recollection-voice">
+          <button type="button" id="recollection-voice-button" class="button button-secondary">● Record this recollection</button>
+          <div id="recollection-voice-preview"></div>
+        </div>
+
+        <div id="recollection-message"></div>
+        <button id="recollection-submit" class="button button-primary">Share what I remember</button>
+      </form>
+    `
+    : "";
+
   shell(`
     <p><a href="#/memories">← Back to Memories</a></p>
     <section class="memory-layout">
@@ -295,8 +325,119 @@ async function renderMemory(id) {
           ${r.hasVoice ? `<audio src="${voiceUrl(r.id)}" controls preload="metadata"></audio>` : ""}
         </article>
       `).join("") : '<div class="empty">No additional recollections yet.</div>'}
+      ${recollectionForm}
     </section>
   `, "memories");
+
+  const form = document.querySelector("#recollection-form");
+  if (!form) return;
+
+  const voiceButton = document.querySelector("#recollection-voice-button");
+  const voicePreview = document.querySelector("#recollection-voice-preview");
+  const submitButton = document.querySelector("#recollection-submit");
+  const message = document.querySelector("#recollection-message");
+
+  let recorder = null;
+  let stream = null;
+  let chunks = [];
+  let voiceBlob = null;
+  let voiceUrlValue = null;
+
+  voiceButton?.addEventListener("click", async () => {
+    if (recorder && recorder.state === "recording") {
+      recorder.stop();
+      voiceButton.textContent = "● Record this recollection";
+      submitButton.disabled = false;
+      return;
+    }
+
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recorder = new MediaRecorder(stream);
+      chunks = [];
+
+      recorder.addEventListener("dataavailable", event => {
+        if (event.data.size > 0) chunks.push(event.data);
+      });
+
+      recorder.addEventListener("stop", () => {
+        voiceBlob = new Blob(chunks, {
+          type: recorder.mimeType || "audio/webm"
+        });
+
+        stream?.getTracks().forEach(track => track.stop());
+        stream = null;
+
+        if (voiceUrlValue) URL.revokeObjectURL(voiceUrlValue);
+        voiceUrlValue = URL.createObjectURL(voiceBlob);
+
+        voicePreview.innerHTML = `
+          <div class="voice-upload-preview">
+            <strong>Voice recollection ready</strong>
+            <audio src="${voiceUrlValue}" controls preload="metadata"></audio>
+            <button type="button" id="remove-recollection-voice" class="text-button">Remove recording</button>
+          </div>
+        `;
+
+        document.querySelector("#remove-recollection-voice")?.addEventListener("click", () => {
+          voiceBlob = null;
+          if (voiceUrlValue) URL.revokeObjectURL(voiceUrlValue);
+          voiceUrlValue = null;
+          voicePreview.innerHTML = "";
+        });
+      });
+
+      recorder.start();
+      voiceButton.textContent = "■ Stop recording";
+      submitButton.disabled = true;
+      message.innerHTML = "";
+    } catch {
+      message.innerHTML = '<div class="error">Microphone access was not available on this device.</div>';
+    }
+  });
+
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    const data = new FormData(form);
+    const story = String(data.get("story") || "").trim();
+
+    if (!story && !voiceBlob) {
+      message.innerHTML = '<div class="error">Write what you remember or record your recollection.</div>';
+      return;
+    }
+
+    if (voiceBlob) {
+      data.append(
+        "voice",
+        new File([voiceBlob], "family-recollection.webm", {
+          type: voiceBlob.type || "audio/webm"
+        })
+      );
+    }
+
+    submitButton.disabled = true;
+    submitButton.textContent = "Saving recollection…";
+    message.innerHTML = "";
+
+    try {
+      await api("/memories/" + encodeURIComponent(id) + "/recollections", {
+        method: "POST",
+        body: data
+      });
+
+      form.reset();
+      voiceBlob = null;
+      if (voiceUrlValue) URL.revokeObjectURL(voiceUrlValue);
+      voiceUrlValue = null;
+      voicePreview.innerHTML = "";
+      message.innerHTML = '<div class="success">Your recollection was saved and is waiting for family review.</div>';
+    } catch (error) {
+      message.innerHTML = '<div class="error">' + escapeHtml(error.message || "Could not save recollection.") + '</div>';
+    } finally {
+      submitButton.disabled = false;
+      submitButton.textContent = "Share what I remember";
+    }
+  });
 }
 
 async function renderPeople() {
