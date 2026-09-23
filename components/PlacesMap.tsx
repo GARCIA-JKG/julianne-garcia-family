@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import "leaflet/dist/leaflet.css";
-
 export type MapMemory = {
   id: string;
   title: string;
@@ -65,7 +63,11 @@ export function PlacesMap({ memories }: { memories: MapMemory[] }) {
 
         popup.append(title, detail, link);
 
-        L.marker(point)
+        L.circleMarker(point, {
+          radius: 7,
+          weight: 2,
+          fillOpacity: 0.85
+        })
           .addTo(map)
           .bindPopup(popup);
       }
