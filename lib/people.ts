@@ -146,6 +146,7 @@ export async function getPersonProfile(id: string) {
            FROM media md
            WHERE md.memory_id = m.id
              AND md.kind = 'photo'
+             AND md.archived = false
            ORDER BY
              CASE WHEN md.id = m.cover_media_id THEN 0 ELSE 1 END,
              md.sort_order,
