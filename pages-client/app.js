@@ -100,6 +100,7 @@ function shell(content, active = "") {
   ];
 
   if (currentUser?.role === "admin" || currentUser?.role === "curator") {
+    nav.push(["curate", "Curate"]);
     nav.push(["scans", "Scan Inbox"]);
   }
 
@@ -689,6 +690,144 @@ async function renderContribute() {
   });
 }
 
+async function renderCurate() {
+  if (currentUser?.role !== "admin" && currentUser?.role !== "curator") {
+    location.hash = "#/memories";
+    return;
+  }
+
+  shell('<div class="loading">Opening the family review queue…</div>', "curate");
+  const { memories, recollections } = await api("/curate");
+
+  const mediaIds = memories.flatMap(memory => memory.media.map(item => item.id));
+  const voiceIds = recollections.filter(item => item.hasVoice).map(item => item.id);
+  await refreshTickets(mediaIds, voiceIds);
+
+  const allCaughtUp = memories.length === 0 && recollections.length === 0;
+
+  shell(`
+    <section class="hero">
+      <p class="eyebrow">FAMILY CURATOR</p>
+      <h1>Stories waiting for review</h1>
+      <p>Review new Memories and Family Recollections before they join the shared archive.</p>
+    </section>
+
+    ${allCaughtUp ? `
+      <div class="empty">
+        <strong>ALL CAUGHT UP</strong><br>
+        No family stories are waiting for review.
+      </div>
+    ` : ""}
+
+    ${memories.length ? `
+      <section class="review-section">
+        <div class="review-section-heading">
+          <p class="eyebrow">NEW MEMORIES</p>
+          <h2>${memories.length} waiting</h2>
+        </div>
+
+        <div class="review-list">
+          ${memories.map(memory => `
+            <article class="review-card" data-review-memory="${memory.id}">
+              <div class="review-copy">
+                <p class="eyebrow">${escapeHtml(memory.dateLabel || "DATE UNKNOWN")} · ${escapeHtml(memory.place || "PLACE UNKNOWN")}</p>
+                <h2>${escapeHtml(memory.title)}</h2>
+                <p>${escapeHtml(memory.story || "No written story was included.")}</p>
+                <p class="review-meta">Shared by ${escapeHtml(memory.contributor || "Family member")} · ${memory.media.length} media item${memory.media.length === 1 ? "" : "s"}</p>
+                ${memory.people?.length ? `<p class="review-meta">${escapeHtml(memory.people.map(person => person.displayName).join(" · "))}</p>` : ""}
+              </div>
+
+              ${memory.media.length ? `
+                <div class="review-media-grid">
+                  ${memory.media.map(item => {
+                    const src = mediaUrl(item.id);
+                    if (item.kind === "photo") {
+                      return `<img src="${src}" alt="${escapeHtml(item.caption || item.originalFilename)}" loading="lazy" />`;
+                    }
+                    if (item.kind === "video") {
+                      return `<video src="${src}" controls preload="metadata"></video>`;
+                    }
+                    return `<audio src="${src}" controls preload="metadata"></audio>`;
+                  }).join("")}
+                </div>
+              ` : ""}
+
+              <div class="review-actions">
+                <button class="button button-primary" data-memory-decision="approved" data-id="${memory.id}">Approve</button>
+                <button class="button button-secondary" data-memory-decision="rejected" data-id="${memory.id}">Reject</button>
+                <div class="review-message"></div>
+              </div>
+            </article>
+          `).join("")}
+        </div>
+      </section>
+    ` : ""}
+
+    ${recollections.length ? `
+      <section class="review-section">
+        <div class="review-section-heading">
+          <p class="eyebrow">FAMILY RECOLLECTIONS</p>
+          <h2>${recollections.length} waiting</h2>
+        </div>
+
+        <div class="review-list">
+          ${recollections.map(item => `
+            <article class="review-card" data-review-recollection="${item.id}">
+              <div class="review-copy">
+                <p class="eyebrow">ADDITIONAL PERSPECTIVE</p>
+                <h2>${escapeHtml(item.contributor)} remembers…</h2>
+                ${item.story ? `<blockquote class="review-recollection-quote">“${escapeHtml(item.story)}”</blockquote>` : ""}
+                <p class="review-meta">On Memory: <strong>${escapeHtml(item.memoryTitle || "Untitled Memory")}</strong>${item.ageAtMemory ? " · About " + escapeHtml(item.ageAtMemory) + " at the time" : ""}</p>
+                ${item.hasVoice ? `<audio class="review-audio" src="${voiceUrl(item.id)}" controls preload="metadata"></audio>` : ""}
+              </div>
+
+              <div class="review-actions">
+                <button class="button button-primary" data-recollection-decision="approved" data-id="${item.id}">Approve</button>
+                <button class="button button-secondary" data-recollection-decision="rejected" data-id="${item.id}">Reject</button>
+                <div class="review-message"></div>
+              </div>
+            </article>
+          `).join("")}
+        </div>
+      </section>
+    ` : ""}
+  `, "curate");
+
+  async function decide(kind, id, status, button) {
+    const card = button.closest(".review-card");
+    const buttons = card.querySelectorAll("button");
+    const message = card.querySelector(".review-message");
+    buttons.forEach(item => item.disabled = true);
+    message.innerHTML = "";
+
+    try {
+      await api("/curate/" + kind + "/" + encodeURIComponent(id), {
+        method: "POST",
+        body: JSON.stringify({ status })
+      });
+
+      card.classList.add("review-resolved");
+      message.innerHTML = '<div class="success">' + (status === "approved" ? "Approved." : "Rejected.") + '</div>';
+      setTimeout(() => renderCurate(), 250);
+    } catch (error) {
+      message.innerHTML = '<div class="error">' + escapeHtml(error.message || "Could not save review decision.") + '</div>';
+      buttons.forEach(item => item.disabled = false);
+    }
+  }
+
+  document.querySelectorAll("[data-memory-decision]").forEach(button => {
+    button.addEventListener("click", () => {
+      decide("memories", button.dataset.id, button.dataset.memoryDecision, button);
+    });
+  });
+
+  document.querySelectorAll("[data-recollection-decision]").forEach(button => {
+    button.addEventListener("click", () => {
+      decide("recollections", button.dataset.id, button.dataset.recollectionDecision, button);
+    });
+  });
+}
+
 async function renderScans() {
   if (currentUser?.role !== "admin" && currentUser?.role !== "curator") {
     location.hash = "#/memories";
@@ -1249,6 +1388,7 @@ async function render() {
   try {
     if (section === "memories" && parts[1]) return await renderMemory(parts[1]);
     if (section === "timeline") return await renderTimeline();
+    if (section === "curate") return await renderCurate();
     if (section === "scans" && parts[1]) return await renderScanBatch(parts[1]);
     if (section === "scans") return await renderScans();
     if (section === "family-access") return await renderFamilyAccess();
