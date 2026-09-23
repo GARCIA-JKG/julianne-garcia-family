@@ -2,6 +2,8 @@
 
 import { FormEvent, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { MonthYearFields } from "@/components/MonthYearFields";
+import { LocationFields } from "@/components/LocationFields";
 
 export function MemorySubmissionForm() {
   const router = useRouter();
@@ -53,10 +55,14 @@ export function MemorySubmissionForm() {
     setStatus("");
 
     const data = new FormData(event.currentTarget);
+
     if (audioBlob) {
-      data.append("media", new File([audioBlob], "family-voice-story.webm", {
-        type: audioBlob.type || "audio/webm"
-      }));
+      data.append(
+        "media",
+        new File([audioBlob], "family-voice-story.webm", {
+          type: audioBlob.type || "audio/webm"
+        })
+      );
     }
 
     const response = await fetch("/api/memories", {
@@ -74,7 +80,9 @@ export function MemorySubmissionForm() {
 
     formRef.current?.reset();
     setAudioBlob(null);
-    setStatus("Memory saved. It is waiting for a family curator to review it.");
+    setStatus(
+      "Memory saved. It is waiting for a family curator to review it."
+    );
     setBusy(false);
     router.refresh();
   }
@@ -83,25 +91,40 @@ export function MemorySubmissionForm() {
     <form ref={formRef} className="memory-form" onSubmit={submit}>
       <fieldset>
         <legend>1. Add photos, video, or a voice</legend>
+
         <label className="upload-zone">
           <span className="upload-icon">＋</span>
           <strong>Choose family media</strong>
           <span>Photos or videos from your phone or computer</span>
-          <input name="media" type="file" multiple accept="image/*,video/*" />
+          <input
+            name="media"
+            type="file"
+            multiple
+            accept="image/*,video/*"
+          />
         </label>
 
-        <button type="button" className="voice-button" onClick={toggleRecording}>
+        <button
+          type="button"
+          className="voice-button"
+          onClick={toggleRecording}
+        >
           <span aria-hidden="true">{recording ? "■" : "●"}</span>
-          {recording ? " Stop recording" : " Record the story in your voice"}
+          {recording
+            ? " Stop recording"
+            : " Record the story in your voice"}
         </button>
 
         {audioBlob && !recording && (
-          <p className="recording-ready">Voice story recorded and ready to upload.</p>
+          <p className="recording-ready">
+            Voice story recorded and ready to upload.
+          </p>
         )}
       </fieldset>
 
       <fieldset>
         <legend>2. Tell the story</legend>
+
         <label>
           Memory title
           <input
@@ -113,20 +136,22 @@ export function MemorySubmissionForm() {
           />
         </label>
 
-        <div className="form-row">
-          <label>
-            About when?
-            <input type="text" name="date" maxLength={80} placeholder="1976, Summer 1994..." />
-          </label>
-          <label>
-            Where?
-            <input
-              type="text"
-              name="place"
-              maxLength={180}
-              placeholder="California, Manila, Grandma's house..."
-            />
-          </label>
+        <div className="structured-fields">
+          <div>
+            <p className="field-group-title">About when?</p>
+            <p className="field-group-help">
+              Month and year are enough. Leave either blank if nobody is sure.
+            </p>
+            <MonthYearFields />
+          </div>
+
+          <div>
+            <p className="field-group-title">Where?</p>
+            <p className="field-group-help">
+              Use a city, region, and country—not a home address.
+            </p>
+            <LocationFields />
+          </div>
         </div>
 
         <label>
@@ -150,10 +175,23 @@ export function MemorySubmissionForm() {
         </label>
       </fieldset>
 
-      {error && <p className="form-error" role="alert">{error}</p>}
-      {status && <p className="form-success" role="status">{status}</p>}
+      {error && (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      )}
 
-      <button type="submit" className="button button-primary button-wide" disabled={busy}>
+      {status && (
+        <p className="form-success" role="status">
+          {status}
+        </p>
+      )}
+
+      <button
+        type="submit"
+        className="button button-primary button-wide"
+        disabled={busy}
+      >
         {busy ? "Saving memory..." : "Share this memory"}
       </button>
     </form>

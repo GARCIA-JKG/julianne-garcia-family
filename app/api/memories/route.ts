@@ -3,14 +3,24 @@ import { db, query } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { storeUpload } from "@/lib/media";
 import { assertSameOrigin, cleanText } from "@/lib/security";
+import {
+  formatMonthYear,
+  geocodePlace,
+  parseMonthYear,
+  parsePlace
+} from "@/lib/date-location";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
+
   if (!user) {
-    return NextResponse.json({ error: "Please sign in." }, { status: 401 });
+    return NextResponse.json(
+      { error: "Please sign in." },
+      { status: 401 }
+    );
   }
 
   try {
@@ -19,36 +29,88 @@ export async function POST(request: Request) {
 
     const title = cleanText(form.get("title"), 180);
     const story = cleanText(form.get("story"), 12_000);
-    const dateLabel = cleanText(form.get("date"), 80);
-    const place = cleanText(form.get("place"), 180);
+    const { month, year } = parseMonthYear(
+      form.get("monthYear")
+    );
+    const dateLabel = formatMonthYear(month, year);
+    const place = parsePlace(
+      form.get("locality"),
+      form.get("region"),
+      form.get("country")
+    );
     const peopleRaw = cleanText(form.get("people"), 1000);
+
     const files = form
       .getAll("media")
-      .filter((item): item is File => item instanceof File && item.size > 0);
+      .filter(
+        (item): item is File =>
+          item instanceof File && item.size > 0
+      );
 
     if (!title || (!story && files.length === 0)) {
       return NextResponse.json(
-        { error: "Give the memory a title and add a story or media." },
+        {
+          error:
+            "Give the memory a title and add a story or media."
+        },
         { status: 400 }
       );
     }
 
     if (files.length > 25) {
-      return NextResponse.json({ error: "Limit each memory to 25 files." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Limit each memory to 25 files." },
+        { status: 400 }
+      );
     }
+
+    const geo = place.label
+      ? await geocodePlace(place)
+      : null;
 
     const client = await db.connect();
     let memoryId = "";
 
     try {
       await client.query("BEGIN");
+
       const memory = await client.query<{ id: string }>(
-        `INSERT INTO memories
-          (title, story, approximate_date_label, place_name, status, created_by)
-         VALUES ($1, $2, $3, $4, 'pending', $5)
-         RETURNING id`,
-        [title, story || null, dateLabel || null, place || null, user.id]
+        `INSERT INTO memories (
+          title,
+          story,
+          approximate_date_label,
+          memory_year,
+          memory_month,
+          place_name,
+          locality,
+          region,
+          country,
+          latitude,
+          longitude,
+          status,
+          created_by
+        )
+        VALUES (
+          $1, $2, $3, $4, $5, $6, $7,
+          $8, $9, $10, $11, 'pending', $12
+        )
+        RETURNING id`,
+        [
+          title,
+          story || null,
+          dateLabel,
+          year,
+          month,
+          place.label,
+          place.locality,
+          place.region,
+          place.country,
+          geo?.latitude ?? null,
+          geo?.longitude ?? null,
+          user.id
+        ]
       );
+
       memoryId = memory.rows[0].id;
 
       const people = Array.from(
@@ -70,6 +132,7 @@ export async function POST(request: Request) {
            RETURNING id`,
           [displayName]
         );
+
         await client.query(
           `INSERT INTO memory_people (memory_id, person_id)
            VALUES ($1, $2)
@@ -89,10 +152,18 @@ export async function POST(request: Request) {
     try {
       for (const file of files) {
         const stored = await storeUpload(file, memoryId);
+
         await query(
-          `INSERT INTO media
-            (memory_id, kind, original_filename, storage_path, mime_type, bytes, uploaded_by)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          `INSERT INTO media (
+            memory_id,
+            kind,
+            original_filename,
+            storage_path,
+            mime_type,
+            bytes,
+            uploaded_by
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
           [
             memoryId,
             stored.kind,
@@ -105,15 +176,24 @@ export async function POST(request: Request) {
         );
       }
     } catch (error) {
-      await query("UPDATE memories SET status = 'rejected' WHERE id = $1", [memoryId]);
+      await query(
+        "UPDATE memories SET status = 'rejected' WHERE id = $1",
+        [memoryId]
+      );
       throw error;
     }
 
     return NextResponse.json({ ok: true, id: memoryId });
   } catch (error) {
     console.error("memory submission failed", error);
+
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Could not save this memory." },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Could not save this memory."
+      },
       { status: 500 }
     );
   }

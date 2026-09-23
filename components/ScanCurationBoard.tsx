@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ScanItem } from "@/lib/imports";
+import { MonthYearFields } from "@/components/MonthYearFields";
+import { LocationFields } from "@/components/LocationFields";
 
 export function ScanCurationBoard({
   batchId,
@@ -30,7 +32,9 @@ export function ScanCurationBoard({
 
   function selectAll() {
     setSelected(
-      selected.length === pending.length ? [] : pending.map((item) => item.id)
+      selected.length === pending.length
+        ? []
+        : pending.map((item) => item.id)
     );
   }
 
@@ -46,8 +50,10 @@ export function ScanCurationBoard({
         body: JSON.stringify({
           itemIds: selected,
           title: formData.get("title"),
-          date: formData.get("date"),
-          place: formData.get("place"),
+          monthYear: formData.get("monthYear"),
+          locality: formData.get("locality"),
+          region: formData.get("region"),
+          country: formData.get("country"),
           people: formData.get("people"),
           story: formData.get("story")
         })
@@ -55,6 +61,7 @@ export function ScanCurationBoard({
     );
 
     const result = await response.json().catch(() => ({}));
+
     if (!response.ok) {
       setError(result.error ?? "Could not curate these scans.");
       setBusy(false);
@@ -87,14 +94,22 @@ export function ScanCurationBoard({
             once. A Memory can contain one photo or fifty.
           </p>
         </div>
-        <button className="button button-secondary" onClick={selectAll}>
-          {selected.length === pending.length ? "Clear selection" : "Select all"}
+
+        <button
+          className="button button-secondary"
+          onClick={selectAll}
+          type="button"
+        >
+          {selected.length === pending.length
+            ? "Clear selection"
+            : "Select all"}
         </button>
       </div>
 
       <div className="scan-grid">
         {pending.map((item) => {
           const active = selected.includes(item.id);
+
           return (
             <button
               type="button"
@@ -109,8 +124,14 @@ export function ScanCurationBoard({
                 alt={item.originalFilename}
                 loading="lazy"
               />
-              <span className="scan-check">{active ? "✓" : ""}</span>
-              <span className="scan-name">{item.originalFilename}</span>
+
+              <span className="scan-check">
+                {active ? "✓" : ""}
+              </span>
+
+              <span className="scan-name">
+                {item.originalFilename}
+              </span>
             </button>
           );
         })}
@@ -134,23 +155,16 @@ export function ScanCurationBoard({
           />
         </label>
 
-        <div className="form-row">
-          <label>
-            About when?
-            <input
-              name="date"
-              maxLength={80}
-              placeholder="Christmas 1987, early 1970s..."
-            />
-          </label>
-          <label>
-            Where?
-            <input
-              name="place"
-              maxLength={180}
-              placeholder="San Diego, Grandma's house..."
-            />
-          </label>
+        <div className="structured-fields">
+          <div>
+            <p className="field-group-title">About when?</p>
+            <MonthYearFields />
+          </div>
+
+          <div>
+            <p className="field-group-title">Where?</p>
+            <LocationFields />
+          </div>
         </div>
 
         <label>
