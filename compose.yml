@@ -45,6 +45,7 @@ services:
     build:
       context: .
     restart: unless-stopped
+    user: "${APP_UID:-1000}:${APP_GID:-1000}"
     depends_on:
       migrate:
         condition: service_completed_successfully
