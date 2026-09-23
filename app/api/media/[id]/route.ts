@@ -30,6 +30,7 @@ export async function GET(
        FROM media md
        JOIN memories m ON m.id = md.memory_id
       WHERE md.id = $1
+        AND md.archived = false
         AND (
           m.status = 'approved'
           OR m.created_by = $2

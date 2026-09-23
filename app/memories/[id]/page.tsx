@@ -25,11 +25,25 @@ export default async function MemoryDetailPage({
       ? await listApprovedRecollections(memory.id)
       : [];
 
+  const canCurate =
+    user.role === "admin" || user.role === "curator";
+
   return (
     <article className="page-section memory-detail">
-      <Link href="/memories" className="text-link">
-        ← Back to memories
-      </Link>
+      <div className="memory-detail-actions">
+        <Link href="/memories" className="text-link">
+          ← Back to memories
+        </Link>
+
+        {canCurate && (
+          <Link
+            href={"/admin/memories/" + memory.id + "/edit"}
+            className="button button-secondary"
+          >
+            Edit & enrich
+          </Link>
+        )}
+      </div>
 
       <div className="memory-detail-grid">
         <div className="memory-detail-media">
@@ -53,9 +67,20 @@ export default async function MemoryDetailPage({
             <div>
               <dt>People</dt>
               <dd>
-                {memory.people.length
-                  ? memory.people.join(", ")
-                  : "Not identified yet"}
+                {memory.people.length ? (
+                  <span className="memory-people-links">
+                    {memory.people.map((person, index) => (
+                      <span key={person.id}>
+                        {index > 0 && ", "}
+                        <Link href={"/people/" + person.id}>
+                          {person.displayName}
+                        </Link>
+                      </span>
+                    ))}
+                  </span>
+                ) : (
+                  "Not identified yet"
+                )}
               </dd>
             </div>
 

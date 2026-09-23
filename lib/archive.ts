@@ -7,6 +7,7 @@ export type MediaItem = {
   originalFilename: string;
   mimeType: string | null;
   caption: string | null;
+  sortOrder: number;
 };
 
 export type ArchiveMemory = {
@@ -15,6 +16,8 @@ export type ArchiveMemory = {
   story: string | null;
   dateLabel: string | null;
   place: string | null;
+  memoryYear: number | null;
+  memoryMonth: number | null;
   locality: string | null;
   region: string | null;
   country: string | null;
@@ -23,8 +26,9 @@ export type ArchiveMemory = {
   status: "draft" | "pending" | "approved" | "rejected";
   contributor: string | null;
   createdBy: string | null;
-  people: string[];
+  people: Array<{ id: string; displayName: string }>;
   media: MediaItem[];
+  coverMediaId: string | null;
   createdAt: string;
 };
 
@@ -38,6 +42,9 @@ const memorySelect = `
       to_char(m.memory_date, 'YYYY-MM-DD')
     ) AS date_label,
     m.place_name,
+    m.memory_year,
+    m.memory_month,
+    m.cover_media_id,
     m.locality,
     m.region,
     m.country,
@@ -50,7 +57,10 @@ const memorySelect = `
     COALESCE(
       (
         SELECT json_agg(
-          p.display_name
+          json_build_object(
+            'id', p.id,
+            'displayName', p.display_name
+          )
           ORDER BY p.display_name
         )
         FROM memory_people mp
@@ -67,12 +77,17 @@ const memorySelect = `
             'kind', md.kind,
             'originalFilename', md.original_filename,
             'mimeType', md.mime_type,
-            'caption', md.caption
+            'caption', md.caption,
+            'sortOrder', md.sort_order
           )
-          ORDER BY md.sort_order, md.created_at
+          ORDER BY
+            CASE WHEN md.id = m.cover_media_id THEN 0 ELSE 1 END,
+            md.sort_order,
+            md.created_at
         )
         FROM media md
         WHERE md.memory_id = m.id
+          AND md.archived = false
       ),
       '[]'::json
     ) AS media
@@ -87,6 +102,14 @@ function mapMemory(row: Record<string, unknown>): ArchiveMemory {
     story: row.story ? String(row.story) : null,
     dateLabel: row.date_label ? String(row.date_label) : null,
     place: row.place_name ? String(row.place_name) : null,
+    memoryYear:
+      row.memory_year === null || row.memory_year === undefined
+        ? null
+        : Number(row.memory_year),
+    memoryMonth:
+      row.memory_month === null || row.memory_month === undefined
+        ? null
+        : Number(row.memory_month),
     locality: row.locality ? String(row.locality) : null,
     region: row.region ? String(row.region) : null,
     country: row.country ? String(row.country) : null,
@@ -105,8 +128,10 @@ function mapMemory(row: Record<string, unknown>): ArchiveMemory {
     createdBy: row.created_by
       ? String(row.created_by)
       : null,
-    people: (row.people as string[]) ?? [],
+    people:
+      (row.people as Array<{ id: string; displayName: string }>) ?? [],
     media: (row.media as MediaItem[]) ?? [],
+    coverMediaId: row.cover_media_id ? String(row.cover_media_id) : null,
     createdAt: new Date(
       String(row.created_at)
     ).toISOString()

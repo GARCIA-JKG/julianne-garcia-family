@@ -1830,3 +1830,393 @@ footer {
     min-height: 360px;
   }
 }
+
+
+/* Edit & Enrich */
+
+.memory-detail-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+}
+
+.memory-people-links a {
+  color: var(--forest);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.memory-people-links a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.memory-editor-page {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.memory-enrichment-form,
+.media-enrichment-board,
+.memory-history-section,
+.person-editor {
+  margin-top: 34px;
+  padding: 30px;
+  background: rgba(255, 250, 240, .72);
+  border: 1px solid var(--line);
+}
+
+.editor-section-heading {
+  margin-bottom: 22px;
+}
+
+.editor-section-heading h2 {
+  margin: 0 0 8px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 34px;
+  font-weight: 500;
+}
+
+.editor-section-heading p:not(.eyebrow) {
+  color: var(--muted);
+}
+
+.memory-enrichment-form,
+.person-profile-form,
+.relationship-form {
+  display: grid;
+  gap: 18px;
+}
+
+.memory-enrichment-form label,
+.person-profile-form label,
+.relationship-form label,
+.media-editor-card label {
+  display: grid;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.memory-enrichment-form input,
+.memory-enrichment-form textarea,
+.person-profile-form input,
+.person-profile-form textarea,
+.relationship-form input,
+.relationship-form select,
+.media-editor-card input,
+.media-editor-card textarea {
+  width: 100%;
+  padding: 13px 14px;
+  color: var(--ink);
+  background: #fffdf8;
+  border: 1px solid var(--line);
+}
+
+.media-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.media-editor-card {
+  padding: 16px;
+  display: grid;
+  gap: 14px;
+  background: #fffdf8;
+  border: 1px solid var(--line);
+}
+
+.media-editor-preview {
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #292d29;
+}
+
+.media-editor-preview img,
+.media-editor-preview video {
+  width: 100%;
+  height: 100%;
+  max-height: 360px;
+  object-fit: contain;
+}
+
+.media-editor-preview audio {
+  width: calc(100% - 24px);
+}
+
+.cover-checkbox {
+  display: flex !important;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+
+.cover-checkbox input {
+  width: auto;
+}
+
+.media-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.button-quiet-danger {
+  color: #7b2e25;
+  background: transparent;
+  border-color: #cba59d;
+}
+
+.button-quiet-danger:hover {
+  background: #f7e3df;
+}
+
+.memory-history-list {
+  border-top: 1px solid var(--line);
+}
+
+.memory-history-row {
+  min-height: 68px;
+  padding: 13px 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+}
+
+.memory-history-row strong,
+.memory-history-row span {
+  display: block;
+}
+
+.memory-history-row span,
+.memory-history-row time {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* Person profiles */
+
+.person-card-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.person-card-link:hover {
+  transform: translateY(-2px);
+  border-color: var(--forest-soft);
+}
+
+.person-profile-page {
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.person-profile-hero {
+  margin: 42px 0 52px;
+  display: flex;
+  gap: 26px;
+  align-items: center;
+}
+
+.person-profile-monogram {
+  width: 126px;
+  height: 126px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  color: #e9e4d8;
+  background: var(--forest);
+  border-radius: 50%;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 48px;
+}
+
+.person-profile-hero h1 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(48px, 7vw, 78px);
+  font-weight: 500;
+  line-height: 1;
+}
+
+.person-lifespan,
+.person-origin {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.person-profile-layout {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 52px;
+  align-items: start;
+}
+
+.person-biography {
+  margin-bottom: 54px;
+}
+
+.person-biography h2,
+.person-memory-section h2 {
+  margin: 0 0 14px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 38px;
+  font-weight: 500;
+}
+
+.person-biography > p:not(.eyebrow) {
+  color: #514a42;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 20px;
+  line-height: 1.7;
+}
+
+.person-profile-sidebar {
+  position: sticky;
+  top: 24px;
+  display: grid;
+  gap: 34px;
+  padding: 24px;
+  background: rgba(255, 250, 240, .56);
+  border: 1px solid var(--line);
+}
+
+.relationship-list,
+.person-place-list {
+  display: grid;
+  gap: 8px;
+}
+
+.relationship-list a {
+  padding: 9px 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid var(--line);
+}
+
+.relationship-list strong {
+  color: var(--forest);
+}
+
+.relationship-list span,
+.person-place-list span {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: capitalize;
+}
+
+.person-memory-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.person-memory-card {
+  overflow: hidden;
+  color: inherit;
+  text-decoration: none;
+  background: rgba(255, 250, 240, .65);
+  border: 1px solid var(--line);
+}
+
+.person-memory-card > div:last-child {
+  padding: 18px;
+}
+
+.person-memory-card h3 {
+  margin: 0 0 5px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 23px;
+  font-weight: 500;
+}
+
+.person-memory-card p:not(.eyebrow) {
+  color: var(--muted);
+}
+
+.person-memory-image {
+  height: 220px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: #ddd5c8;
+  background: var(--forest);
+  font-size: 32px;
+}
+
+.person-memory-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.person-editor {
+  margin-top: 62px;
+}
+
+.relationship-form {
+  margin-top: 28px;
+  padding-top: 26px;
+  border-top: 1px solid var(--line);
+}
+
+.relationship-form h3 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 24px;
+  font-weight: 500;
+}
+
+@media (max-width: 860px) {
+  .media-editor-grid,
+  .person-memory-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .person-profile-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .person-profile-sidebar {
+    position: static;
+  }
+}
+
+@media (max-width: 620px) {
+  .memory-detail-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .memory-enrichment-form,
+  .media-enrichment-board,
+  .memory-history-section,
+  .person-editor {
+    padding: 20px;
+  }
+
+  .person-profile-hero {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .person-profile-monogram {
+    width: 92px;
+    height: 92px;
+    font-size: 36px;
+  }
+
+  .memory-history-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
