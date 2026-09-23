@@ -50,8 +50,7 @@ export function ScanCurationBoard({
         body: JSON.stringify({
           itemIds: selected,
           title: formData.get("title"),
-          month: formData.get("month"),
-          year: formData.get("year"),
+          monthYear: formData.get("monthYear"),
           locality: formData.get("locality"),
           region: formData.get("region"),
           country: formData.get("country"),
