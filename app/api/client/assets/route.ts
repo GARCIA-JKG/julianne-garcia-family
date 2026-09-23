@@ -27,6 +27,8 @@ export async function POST(request: Request) {
     ? body.scanIds.filter((id: unknown): id is string => typeof id === "string").slice(0, 200)
     : [];
 
+  const canCurate = user.role === "admin" || user.role === "curator";
+
   const mediaResult = mediaIds.length
     ? await query<{ id: string }>(
         `SELECT DISTINCT md.id
@@ -34,8 +36,11 @@ export async function POST(request: Request) {
          JOIN memories m ON m.id = md.memory_id
          WHERE md.id = ANY($1::uuid[])
            AND md.archived = false
-           AND m.status = 'approved'`,
-        [mediaIds]
+           AND (
+             m.status = 'approved'
+             OR $2::boolean = true
+           )`,
+        [mediaIds, canCurate]
       )
     : { rows: [] as Array<{ id: string }> };
 
@@ -45,14 +50,17 @@ export async function POST(request: Request) {
          FROM recollections r
          JOIN memories m ON m.id = r.memory_id
          WHERE r.id = ANY($1::uuid[])
-           AND r.status = 'approved'
-           AND m.status = 'approved'
-           AND r.voice_storage_path IS NOT NULL`,
-        [recollectionIds]
+           AND r.voice_storage_path IS NOT NULL
+           AND (
+             (
+               r.status = 'approved'
+               AND m.status = 'approved'
+             )
+             OR $2::boolean = true
+           )`,
+        [recollectionIds, canCurate]
       )
     : { rows: [] as Array<{ id: string }> };
-
-  const canCurate = user.role === "admin" || user.role === "curator";
   const scanResult = canCurate && scanIds.length
     ? await query<{ id: string }>(
         `SELECT id
