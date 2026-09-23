@@ -23,6 +23,9 @@ export async function POST(request: Request) {
   const recollectionIds = Array.isArray(body.recollectionIds)
     ? body.recollectionIds.filter((id: unknown): id is string => typeof id === "string").slice(0, 100)
     : [];
+  const scanIds = Array.isArray(body.scanIds)
+    ? body.scanIds.filter((id: unknown): id is string => typeof id === "string").slice(0, 200)
+    : [];
 
   const mediaResult = mediaIds.length
     ? await query<{ id: string }>(
@@ -49,6 +52,16 @@ export async function POST(request: Request) {
       )
     : { rows: [] as Array<{ id: string }> };
 
+  const canCurate = user.role === "admin" || user.role === "curator";
+  const scanResult = canCurate && scanIds.length
+    ? await query<{ id: string }>(
+        `SELECT id
+         FROM import_items
+         WHERE id = ANY($1::uuid[])`,
+        [scanIds]
+      )
+    : { rows: [] as Array<{ id: string }> };
+
   return clientJson({
     mediaTickets: Object.fromEntries(
       mediaResult.rows.map((row) => [
@@ -60,6 +73,12 @@ export async function POST(request: Request) {
       recollectionResult.rows.map((row) => [
         row.id,
         createAssetTicket("recollection", row.id, user.id)
+      ])
+    ),
+    scanTickets: Object.fromEntries(
+      scanResult.rows.map((row) => [
+        row.id,
+        createAssetTicket("scan", row.id, user.id)
       ])
     )
   });

@@ -4,17 +4,25 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
+import { verifyAssetTicket } from "@/lib/asset-ticket";
 import { query } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  await requireRole(["admin", "curator"]);
   const { id } = await params;
+  const ticket = new URL(request.url).searchParams.get("ticket");
+  const ticketPayload = ticket
+    ? verifyAssetTicket(ticket, "scan", id)
+    : null;
+
+  if (!ticketPayload) {
+    await requireRole(["admin", "curator"]);
+  }
 
   const result = await query<{
     storage_path: string;

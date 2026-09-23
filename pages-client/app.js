@@ -5,7 +5,7 @@ const TOKEN_KEY = "jgf_pages_token";
 const app = document.querySelector("#app");
 let currentUser = null;
 let memoriesCache = null;
-let assetsCache = { mediaTickets: {}, recollectionTickets: {} };
+let assetsCache = { mediaTickets: {}, recollectionTickets: {}, scanTickets: {} };
 let mapInstance = null;
 
 function token() {
@@ -44,19 +44,23 @@ async function api(path, options = {}) {
   return data;
 }
 
-async function refreshTickets(mediaIds = [], recollectionIds = []) {
-  if (!mediaIds.length && !recollectionIds.length) return assetsCache;
+async function refreshTickets(mediaIds = [], recollectionIds = [], scanIds = []) {
+  if (!mediaIds.length && !recollectionIds.length && !scanIds.length) return assetsCache;
 
   const result = await api("/assets", {
     method: "POST",
-    body: JSON.stringify({ mediaIds, recollectionIds })
+    body: JSON.stringify({ mediaIds, recollectionIds, scanIds })
   });
 
   assetsCache = {
-    mediaTickets: { ...assetsCache.mediaTickets, ...result.mediaTickets },
+    mediaTickets: { ...assetsCache.mediaTickets, ...(result.mediaTickets || {}) },
     recollectionTickets: {
       ...assetsCache.recollectionTickets,
-      ...result.recollectionTickets
+      ...(result.recollectionTickets || {})
+    },
+    scanTickets: {
+      ...assetsCache.scanTickets,
+      ...(result.scanTickets || {})
     }
   };
   return assetsCache;
@@ -76,6 +80,13 @@ function voiceUrl(id) {
     : "";
 }
 
+function scanUrl(id) {
+  const ticket = assetsCache.scanTickets[id];
+  return ticket
+    ? API_ROOT + "/api/imports/items/" + encodeURIComponent(id) + "?ticket=" + encodeURIComponent(ticket)
+    : "";
+}
+
 function route() {
   return location.hash.replace(/^#\/?/, "").split("/").filter(Boolean);
 }
@@ -87,6 +98,10 @@ function shell(content, active = "") {
     ["people", "People"],
     ["places", "Places"]
   ];
+
+  if (currentUser?.role === "admin" || currentUser?.role === "curator") {
+    nav.push(["scans", "Scan Inbox"]);
+  }
 
   if (currentUser?.role !== "viewer") {
     nav.push(["contribute", "Share a Memory"]);
@@ -170,7 +185,7 @@ async function logout() {
   sessionStorage.removeItem(TOKEN_KEY);
   currentUser = null;
   memoriesCache = null;
-  assetsCache = { mediaTickets: {}, recollectionTickets: {} };
+  assetsCache = { mediaTickets: {}, recollectionTickets: {}, scanTickets: {} };
   renderLogin();
 }
 
@@ -638,6 +653,304 @@ async function renderContribute() {
   });
 }
 
+async function renderScans() {
+  if (currentUser?.role !== "admin" && currentUser?.role !== "curator") {
+    location.hash = "#/memories";
+    return;
+  }
+
+  shell('<div class="loading">Opening the Scan Inbox…</div>', "scans");
+  const { batches } = await api("/scans");
+
+  shell(`
+    <section class="hero">
+      <p class="eyebrow">SCAN INBOX</p>
+      <h1>Turn boxes of prints into family history.</h1>
+      <p>Upload scans first. Curate them later. Nothing joins the family archive until you group it into a Memory.</p>
+    </section>
+
+    <form id="scan-batch-form" class="scan-batch-form">
+      <label>
+        Batch name
+        <input name="name" required maxlength="160" placeholder="Grandma's photo box — September 2026" />
+      </label>
+      <div class="field-grid">
+        <label>
+          Source
+          <input name="source" maxlength="200" placeholder="Grandma's blue album, shoebox #2..." />
+        </label>
+        <label>
+          Notes
+          <input name="notes" maxlength="500" placeholder="Mostly California, probably 1970s–80s" />
+        </label>
+      </div>
+      <div id="scan-batch-message"></div>
+      <button class="button button-primary">Create scan batch</button>
+    </form>
+
+    <div class="scan-batch-list">
+      ${batches.length ? batches.map(batch => `
+        <a class="scan-batch-card" href="#/scans/${batch.id}">
+          <div>
+            <p class="eyebrow">${escapeHtml(new Date(batch.createdAt).toLocaleDateString())}</p>
+            <h2>${escapeHtml(batch.name)}</h2>
+            ${batch.source ? `<p>${escapeHtml(batch.source)}</p>` : ""}
+          </div>
+          <div class="scan-batch-stats">
+            <span><strong>${batch.total}</strong> scans</span>
+            <span><strong>${batch.pending}</strong> to curate</span>
+            <span><strong>${batch.curated}</strong> curated</span>
+          </div>
+        </a>
+      `).join("") : '<div class="empty">Create a batch when you begin a scan session.</div>'}
+    </div>
+  `, "scans");
+
+  document.querySelector("#scan-batch-form")?.addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const button = form.querySelector("button");
+    const message = document.querySelector("#scan-batch-message");
+    button.disabled = true;
+    button.textContent = "Creating…";
+    message.innerHTML = "";
+
+    try {
+      const result = await api("/scans", {
+        method: "POST",
+        body: JSON.stringify({
+          name: data.get("name"),
+          source: data.get("source"),
+          notes: data.get("notes")
+        })
+      });
+      location.hash = "#/scans/" + result.id;
+    } catch (error) {
+      message.innerHTML = '<div class="error">' + escapeHtml(error.message || "Could not create scan batch.") + '</div>';
+      button.disabled = false;
+      button.textContent = "Create scan batch";
+    }
+  });
+}
+
+async function renderScanBatch(id) {
+  if (currentUser?.role !== "admin" && currentUser?.role !== "curator") {
+    location.hash = "#/memories";
+    return;
+  }
+
+  shell('<div class="loading">Opening scan batch…</div>', "scans");
+  const { batch } = await api("/scans/" + encodeURIComponent(id));
+  const pending = batch.items.filter(item => item.status === "pending");
+
+  await refreshTickets([], [], pending.map(item => item.id));
+
+  shell(`
+    <p><a href="#/scans">← Back to Scan Inbox</a></p>
+    <section class="hero scan-hero">
+      <p class="eyebrow">SCAN BATCH</p>
+      <h1>${escapeHtml(batch.name)}</h1>
+      ${batch.source ? `<p>Source: ${escapeHtml(batch.source)}</p>` : ""}
+      ${batch.notes ? `<p>${escapeHtml(batch.notes)}</p>` : ""}
+    </section>
+
+    <section class="scan-upload-panel">
+      <div>
+        <p class="eyebrow">BULK UPLOAD</p>
+        <h2>Add scanned prints</h2>
+        <p>Choose a whole scan session at once. Files upload three at a time so a large batch does not overload the family server.</p>
+      </div>
+      <label class="upload-zone">
+        <span class="upload-icon">＋</span>
+        <strong id="scan-upload-label">Choose scanned photos</strong>
+        <span>JPG, PNG, HEIC/HEIF, WebP, GIF, or AVIF</span>
+        <input id="scan-files" type="file" accept="image/*,.heic,.heif,.avif" multiple />
+      </label>
+      <div id="scan-progress"></div>
+      <div id="scan-upload-errors"></div>
+    </section>
+
+    ${pending.length ? `
+      <section class="scan-curation">
+        <div class="scan-toolbar">
+          <div>
+            <p class="eyebrow">CURATION TABLE</p>
+            <h2>Group scans into a Memory</h2>
+            <p>Select the photos that belong together, then describe that moment once.</p>
+          </div>
+          <button id="scan-select-all" class="button button-secondary" type="button">Select all</button>
+        </div>
+
+        <div class="scan-grid">
+          ${pending.map(item => `
+            <button type="button" class="scan-tile" data-scan-id="${item.id}">
+              <img src="${scanUrl(item.id)}" alt="${escapeHtml(item.originalFilename)}" loading="lazy" />
+              <span class="scan-check"></span>
+              <span class="scan-name">${escapeHtml(item.originalFilename)}</span>
+            </button>
+          `).join("")}
+        </div>
+
+        <form id="scan-curate-form" class="scan-curate-form">
+          <div class="scan-selection-count"><strong id="selected-count">0</strong> scans selected</div>
+          <label>
+            Memory title
+            <input name="title" maxlength="180" required placeholder="Christmas at Grandma's house" />
+          </label>
+          <div class="field-grid">
+            <label>About when?<input type="month" name="monthYear" /></label>
+            <label>City<input name="locality" maxlength="120" /></label>
+            <label>State / region<input name="region" maxlength="120" /></label>
+            <label>Country<input name="country" maxlength="120" /></label>
+          </div>
+          <label>
+            Who appears in these photos?
+            <input name="people" maxlength="1000" placeholder="Grandma, Grandpa, Mom..." />
+          </label>
+          <label>
+            What is the story?
+            <textarea name="story" rows="5" maxlength="12000" placeholder="What should Julianne know when she sees these photos?"></textarea>
+          </label>
+          <div id="scan-curate-message"></div>
+          <button id="scan-curate-submit" class="button button-primary" disabled>Curate selected scans into a Memory</button>
+        </form>
+      </section>
+    ` : '<div class="empty">No uncurated scans remain in this batch.</div>'}
+  `, "scans");
+
+  const fileInput = document.querySelector("#scan-files");
+  const uploadLabel = document.querySelector("#scan-upload-label");
+  const progressBox = document.querySelector("#scan-progress");
+  const errorBox = document.querySelector("#scan-upload-errors");
+
+  fileInput?.addEventListener("change", async () => {
+    const files = Array.from(fileInput.files || []);
+    if (!files.length) return;
+
+    fileInput.disabled = true;
+    uploadLabel.textContent = "Uploading scans…";
+    errorBox.innerHTML = "";
+
+    let cursor = 0;
+    let completed = 0;
+    let failed = 0;
+    const errors = [];
+
+    function updateProgress() {
+      progressBox.innerHTML = `
+        <div class="scan-progress">
+          <strong>${completed + failed} / ${files.length}</strong>
+          <span>${completed} uploaded${failed ? " · " + failed + " failed" : ""}</span>
+          <progress max="${files.length}" value="${completed + failed}"></progress>
+        </div>
+      `;
+    }
+
+    async function worker() {
+      while (cursor < files.length) {
+        const index = cursor++;
+        const file = files[index];
+        const data = new FormData();
+        data.append("file", file);
+
+        try {
+          await api("/scans/" + encodeURIComponent(id) + "/items", {
+            method: "POST",
+            body: data
+          });
+          completed += 1;
+        } catch (error) {
+          failed += 1;
+          errors.push(file.name + ": " + (error.message || "Upload failed"));
+        }
+        updateProgress();
+      }
+    }
+
+    updateProgress();
+    await Promise.all([worker(), worker(), worker()]);
+
+    if (errors.length) {
+      errorBox.innerHTML = '<div class="error">' + errors.slice(0, 10).map(escapeHtml).join("<br>") + '</div>';
+    }
+
+    if (completed > 0) {
+      await renderScanBatch(id);
+      return;
+    }
+
+    fileInput.disabled = false;
+    uploadLabel.textContent = "Choose scanned photos";
+  });
+
+  const selected = new Set();
+  const tiles = Array.from(document.querySelectorAll("[data-scan-id]"));
+  const count = document.querySelector("#selected-count");
+  const curateSubmit = document.querySelector("#scan-curate-submit");
+  const selectAll = document.querySelector("#scan-select-all");
+
+  function syncSelection() {
+    tiles.forEach(tile => {
+      const active = selected.has(tile.dataset.scanId);
+      tile.classList.toggle("selected", active);
+      tile.querySelector(".scan-check").textContent = active ? "✓" : "";
+      tile.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+    if (count) count.textContent = String(selected.size);
+    if (curateSubmit) curateSubmit.disabled = selected.size === 0;
+    if (selectAll) selectAll.textContent = selected.size === tiles.length && tiles.length ? "Clear selection" : "Select all";
+  }
+
+  tiles.forEach(tile => {
+    tile.addEventListener("click", () => {
+      const itemId = tile.dataset.scanId;
+      if (selected.has(itemId)) selected.delete(itemId);
+      else selected.add(itemId);
+      syncSelection();
+    });
+  });
+
+  selectAll?.addEventListener("click", () => {
+    if (selected.size === tiles.length) selected.clear();
+    else tiles.forEach(tile => selected.add(tile.dataset.scanId));
+    syncSelection();
+  });
+
+  document.querySelector("#scan-curate-form")?.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (!selected.size) return;
+
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const message = document.querySelector("#scan-curate-message");
+    curateSubmit.disabled = true;
+    curateSubmit.textContent = "Creating Memory…";
+    message.innerHTML = "";
+
+    try {
+      const result = await api("/scans/" + encodeURIComponent(id) + "/curate", {
+        method: "POST",
+        body: JSON.stringify({
+          itemIds: Array.from(selected),
+          title: data.get("title"),
+          monthYear: data.get("monthYear"),
+          locality: data.get("locality"),
+          region: data.get("region"),
+          country: data.get("country"),
+          people: data.get("people"),
+          story: data.get("story")
+        })
+      });
+      location.hash = "#/memories/" + result.memoryId;
+    } catch (error) {
+      message.innerHTML = '<div class="error">' + escapeHtml(error.message || "Could not curate these scans.") + '</div>';
+      curateSubmit.disabled = false;
+      curateSubmit.textContent = "Curate selected scans into a Memory";
+    }
+  });
+}
+
 async function renderPlaces() {
   shell('<div class="loading">Mapping family history…</div>', "places");
   const { places } = await api("/places");
@@ -700,6 +1013,8 @@ async function render() {
   try {
     if (section === "memories" && parts[1]) return await renderMemory(parts[1]);
     if (section === "timeline") return await renderTimeline();
+    if (section === "scans" && parts[1]) return await renderScanBatch(parts[1]);
+    if (section === "scans") return await renderScans();
     if (section === "contribute") return await renderContribute();
     if (section === "people" && parts[1]) return await renderPerson(parts[1]);
     if (section === "people") return await renderPeople();
