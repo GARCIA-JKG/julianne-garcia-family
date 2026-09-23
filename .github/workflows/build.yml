@@ -28,6 +28,9 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
+      - name: Check public client JavaScript
+        run: node --check pages-client/app.js
+
       - name: Build application
         run: npm run build
 
