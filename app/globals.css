@@ -1684,3 +1684,149 @@ footer {
     font-size: 18px;
   }
 }
+
+
+/* Structured dates and Places */
+
+.structured-fields {
+  margin: 4px 0 20px;
+  display: grid;
+  grid-template-columns: .75fr 1.25fr;
+  gap: 18px;
+}
+
+.structured-fields > div {
+  padding: 18px;
+  background: rgba(255, 253, 248, .62);
+  border: 1px solid var(--line);
+}
+
+.field-group-title {
+  margin: 0 0 3px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.field-group-help {
+  margin: 0 0 13px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.month-year-fields,
+.location-fields {
+  display: grid;
+  gap: 12px;
+}
+
+.month-picker {
+  display: grid;
+  gap: 7px;
+}
+
+.month-picker input,
+.location-fields input,
+.location-fields select {
+  width: 100%;
+  padding: 13px 14px;
+  color: var(--ink);
+  background: #fffdf8;
+  border: 1px solid var(--line);
+}
+
+.location-fields {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.family-map {
+  width: 100%;
+  height: min(62vh, 620px);
+  min-height: 420px;
+  margin-bottom: 48px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #e6e2d8;
+}
+
+.family-map .leaflet-popup-content {
+  min-width: 180px;
+}
+
+.family-map .leaflet-popup-content strong {
+  display: block;
+  margin-bottom: 3px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 16px;
+}
+
+.family-map .leaflet-popup-content p {
+  margin: 0 0 8px;
+  color: #625a50;
+  font-size: 12px;
+}
+
+.family-map .leaflet-popup-content a {
+  color: var(--forest);
+  font-weight: 700;
+}
+
+.place-groups {
+  display: grid;
+  gap: 42px;
+}
+
+.place-group h2 {
+  margin: 0 0 14px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 34px;
+  font-weight: 500;
+}
+
+.place-memory-list {
+  border-top: 1px solid var(--line);
+}
+
+.place-memory-row {
+  min-height: 72px;
+  padding: 14px 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  text-decoration: none;
+  border-bottom: 1px solid var(--line);
+}
+
+.place-memory-row:hover {
+  padding-left: 9px;
+}
+
+.place-memory-row strong,
+.place-memory-row span {
+  display: block;
+}
+
+.place-memory-row > div > strong {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 19px;
+}
+
+.place-memory-row > div > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@media (max-width: 760px) {
+  .structured-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .location-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .family-map {
+    min-height: 360px;
+  }
+}
