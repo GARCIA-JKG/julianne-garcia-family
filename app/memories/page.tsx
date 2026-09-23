@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
 import { MemoryCard } from "@/components/MemoryCard";
-import { memories } from "@/lib/sample-data";
+import { requireUser } from "@/lib/auth";
+import { listApprovedMemories } from "@/lib/archive";
 
-export const metadata: Metadata = {
-  title: "Memories"
-};
+export const metadata: Metadata = { title: "Memories" };
+export const dynamic = "force-dynamic";
 
-export default function MemoriesPage() {
+export default async function MemoriesPage() {
+  await requireUser();
+  const memories = await listApprovedMemories();
+
   return (
     <section className="page-section">
       <div className="page-intro">
@@ -18,18 +21,16 @@ export default function MemoriesPage() {
         </p>
       </div>
 
-      <div className="filter-row" aria-label="Memory filters">
-        <button className="filter active">All memories</button>
-        <button className="filter">Photos</button>
-        <button className="filter">Videos</button>
-        <button className="filter">With a story</button>
-      </div>
-
-      <div className="memory-grid">
-        {memories.map((memory) => (
-          <MemoryCard key={memory.id} memory={memory} />
-        ))}
-      </div>
+      {memories.length ? (
+        <div className="memory-grid">
+          {memories.map((memory) => <MemoryCard key={memory.id} memory={memory} />)}
+        </div>
+      ) : (
+        <div className="empty-keepsake">
+          <span>NO APPROVED MEMORIES YET</span>
+          <h2>This archive grows one family story at a time.</h2>
+        </div>
+      )}
     </section>
   );
 }

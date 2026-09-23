@@ -1,10 +1,14 @@
 import Link from "next/link";
 import { MemoryCard } from "@/components/MemoryCard";
-import { memories } from "@/lib/sample-data";
+import { requireUser } from "@/lib/auth";
+import { listApprovedMemories } from "@/lib/archive";
 
-const years = ["1940", "1960", "1980", "2000", "2020", "Today"];
+export const dynamic = "force-dynamic";
 
-export default function Home() {
+export default async function Home() {
+  const user = await requireUser();
+  const memories = await listApprovedMemories(3);
+
   return (
     <>
       <section className="hero">
@@ -23,20 +27,22 @@ export default function Home() {
             <Link href="/memories" className="button button-primary">
               Explore our story
             </Link>
-            <Link href="/contribute" className="button button-secondary">
-              Share a memory
-            </Link>
+            {user.role !== "viewer" && (
+              <Link href="/contribute" className="button button-secondary">
+                Share a memory
+              </Link>
+            )}
           </div>
           <p className="signature">— Julianne</p>
         </div>
 
-        <div className="hero-keepsake" aria-label="Family memory placeholder">
+        <div className="hero-keepsake" aria-label="Family memory">
           <div className="polaroid polaroid-back">
             <div className="placeholder-photo" />
           </div>
           <div className="polaroid polaroid-front">
             <div className="placeholder-photo">
-              <span>family photo</span>
+              <span>our family story</span>
             </div>
             <p>Our story is still being written.</p>
           </div>
@@ -49,35 +55,22 @@ export default function Home() {
             <p className="eyebrow">FEATURED MEMORIES</p>
             <h2>Stories worth passing down</h2>
           </div>
-          <Link href="/memories" className="text-link">
-            View all memories →
-          </Link>
+          <Link href="/memories" className="text-link">View all memories →</Link>
         </div>
-        <div className="memory-grid">
-          {memories.map((memory) => (
-            <MemoryCard key={memory.id} memory={memory} />
-          ))}
-        </div>
-      </section>
 
-      <section className="timeline-section">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">THROUGH THE YEARS</p>
-            <h2>A family measured in moments</h2>
+        {memories.length ? (
+          <div className="memory-grid">
+            {memories.map((memory) => <MemoryCard key={memory.id} memory={memory} />)}
           </div>
-        </div>
-        <div className="timeline">
-          {years.map((year) => (
-            <div className="timeline-stop" key={year}>
-              <span />
-              <strong>{year}</strong>
-            </div>
-          ))}
-        </div>
-        <Link href="/timeline" className="button button-secondary">
-          Explore the family timeline
-        </Link>
+        ) : (
+          <div className="empty-keepsake">
+            <span>THE FIRST PAGE IS BLANK</span>
+            <h2>Your family&apos;s first approved memory will appear here.</h2>
+            {user.role !== "viewer" && (
+              <Link href="/contribute" className="button button-primary">Share the first memory</Link>
+            )}
+          </div>
+        )}
       </section>
 
       <section className="invitation">
@@ -90,9 +83,9 @@ export default function Home() {
             you never want our family to forget.
           </p>
         </div>
-        <Link href="/contribute" className="button button-light">
-          Add your memory
-        </Link>
+        {user.role !== "viewer" && (
+          <Link href="/contribute" className="button button-light">Add your memory</Link>
+        )}
       </section>
     </>
   );

@@ -11,25 +11,44 @@ services:
       TZ: ${TZ}
     volumes:
       - type: bind
-        source: /srv/julianne-garcia-family/database
+        source: ${DB_DATA_LOCATION}
         target: /var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
     networks:
       - family-private
     cpus: 0.75
     mem_limit: 1g
 
+  migrate:
+    build:
+      context: .
+    restart: "no"
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DATABASE_HOST: database
+    command: ["node", "scripts/migrate.mjs"]
+    networks:
+      - family-private
+    cpus: 0.5
+    mem_limit: 512m
+
   web:
     build:
       context: .
     restart: unless-stopped
+    user: "${APP_UID:-1000}:${APP_GID:-1000}"
     depends_on:
-      database:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -40,8 +59,16 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       DATABASE_HOST: database
       SESSION_SECRET: ${SESSION_SECRET}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      MEDIA_UPLOAD_ROOT: /media/uploads
     ports:
       - "${APP_PORT}:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     volumes:
       - type: bind
         source: ${MEDIA_ROOT}/master-scans

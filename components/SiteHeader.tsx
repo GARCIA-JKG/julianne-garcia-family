@@ -1,6 +1,10 @@
 import Link from "next/link";
+import { getCurrentUser } from "@/lib/auth";
+import { LogoutButton } from "@/components/LogoutButton";
 
-export function SiteHeader() {
+export async function SiteHeader() {
+  const user = await getCurrentUser();
+
   return (
     <header className="site-header">
       <Link className="brand" href="/">
@@ -12,12 +16,22 @@ export function SiteHeader() {
       </Link>
 
       <nav aria-label="Primary navigation">
-        <Link href="/memories">Memories</Link>
-        <Link href="/timeline">Timeline</Link>
-        <Link href="/people">People</Link>
-        <Link href="/contribute" className="nav-cta">
-          Share a Memory
-        </Link>
+        {user ? (
+          <>
+            <Link href="/memories">Memories</Link>
+            <Link href="/timeline">Timeline</Link>
+            <Link href="/people">People</Link>
+            {["admin", "curator"].includes(user.role) && <Link href="/admin">Curate</Link>}
+            {user.role === "admin" && <Link href="/admin/users">Family Access</Link>}
+            {user.role !== "viewer" && (
+              <Link href="/contribute" className="nav-cta">Share a Memory</Link>
+            )}
+            <Link href="/account">Account</Link>
+            <LogoutButton />
+          </>
+        ) : (
+          <Link href="/login" className="nav-cta">Family sign in</Link>
+        )}
       </nav>
     </header>
   );
