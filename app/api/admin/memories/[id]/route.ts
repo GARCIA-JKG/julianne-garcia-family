@@ -30,8 +30,55 @@ export async function PUT(
 
     const title = cleanText(form.get("title"), 180);
     const story = cleanText(form.get("story"), 12000);
-    const { month, year } = parseMonthYear(form.get("monthYear"));
-    const dateLabel = formatMonthYear(month, year);
+    const existing = await query<{
+      approximate_date_label: string | null;
+      memory_year: number | null;
+      memory_month: number | null;
+      place_name: string | null;
+      locality: string | null;
+      region: string | null;
+      country: string | null;
+      latitude: number | null;
+      longitude: number | null;
+    }>(
+      `SELECT
+         approximate_date_label,
+         memory_year,
+         memory_month,
+         place_name,
+         locality,
+         region,
+         country,
+         latitude,
+         longitude
+       FROM memories
+       WHERE id = $1
+       LIMIT 1`,
+      [id]
+    );
+
+    if (!existing.rows[0]) {
+      return NextResponse.json(
+        { error: "Memory not found." },
+        { status: 404 }
+      );
+    }
+
+    const previous = existing.rows[0];
+    const parsedDate = parseMonthYear(form.get("monthYear"));
+    const hasStructuredDate =
+      parsedDate.month !== null || parsedDate.year !== null;
+
+    const month = hasStructuredDate
+      ? parsedDate.month
+      : previous.memory_month;
+    const year = hasStructuredDate
+      ? parsedDate.year
+      : previous.memory_year;
+    const dateLabel = hasStructuredDate
+      ? formatMonthYear(month, year)
+      : previous.approximate_date_label;
+
     const place = parsePlace(
       form.get("locality"),
       form.get("region"),
@@ -57,7 +104,27 @@ export async function PUT(
 
     await captureMemorySnapshot(id, user.id, changeSummary);
 
-    const geo = place.label ? await geocodePlace(place) : null;
+    const hasStructuredPlace = Boolean(place.label);
+    const geo = hasStructuredPlace
+      ? await geocodePlace(place)
+      : null;
+
+    const finalPlace = hasStructuredPlace
+      ? place
+      : {
+          locality: previous.locality,
+          region: previous.region,
+          country: previous.country,
+          label: previous.place_name
+        };
+
+    const finalLatitude = hasStructuredPlace
+      ? geo?.latitude ?? null
+      : previous.latitude;
+
+    const finalLongitude = hasStructuredPlace
+      ? geo?.longitude ?? null
+      : previous.longitude;
     const storedFiles = [];
 
     for (const file of files.slice(0, 25)) {
@@ -92,12 +159,12 @@ export async function PUT(
           dateLabel,
           year,
           month,
-          place.label,
-          place.locality,
-          place.region,
-          place.country,
-          geo?.latitude ?? null,
-          geo?.longitude ?? null,
+          finalPlace.label,
+          finalPlace.locality,
+          finalPlace.region,
+          finalPlace.country,
+          finalLatitude,
+          finalLongitude,
           id
         ]
       );
