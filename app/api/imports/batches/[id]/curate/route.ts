@@ -36,8 +36,7 @@ export async function POST(
     const title = cleanText(body.title, 180);
     const story = cleanText(body.story, 12000);
     const { month, year } = parseMonthYear(
-      body.month,
-      body.year
+      body.monthYear
     );
     const dateLabel = formatMonthYear(month, year);
     const place = parsePlace(
