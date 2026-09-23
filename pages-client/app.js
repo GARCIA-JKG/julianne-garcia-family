@@ -100,6 +100,7 @@ function shell(content, active = "") {
   ];
 
   if (currentUser?.role === "admin" || currentUser?.role === "curator") {
+    nav.push(["curate", "Curate"]);
     nav.push(["scans", "Scan Inbox"]);
   }
 
@@ -271,6 +272,36 @@ async function renderMemory(id) {
     return `<figure><audio src="${src}" controls preload="metadata"></audio></figure>`;
   }).join("");
 
+  const recollectionForm = currentUser?.role !== "viewer"
+    ? `
+      <form id="recollection-form" class="recollection-form">
+        <div class="recollection-form-heading">
+          <p class="eyebrow">ADD YOUR PERSPECTIVE</p>
+          <h3>I remember this…</h3>
+          <p>Tell the part you remember. Your version can be different from someone else's—that is part of preserving family history.</p>
+        </div>
+
+        <label>
+          What do you remember?
+          <textarea name="story" rows="5" maxlength="8000" placeholder="I was seven and cried because I thought Santa forgot my present..."></textarea>
+        </label>
+
+        <label>
+          About how old were you? <span class="optional">(optional)</span>
+          <input name="ageAtMemory" maxlength="80" placeholder="7 years old, a teenager, about 20..." />
+        </label>
+
+        <div class="recollection-voice">
+          <button type="button" id="recollection-voice-button" class="button button-secondary">● Record this recollection</button>
+          <div id="recollection-voice-preview"></div>
+        </div>
+
+        <div id="recollection-message"></div>
+        <button id="recollection-submit" class="button button-primary">Share what I remember</button>
+      </form>
+    `
+    : "";
+
   shell(`
     <p><a href="#/memories">← Back to Memories</a></p>
     <section class="memory-layout">
@@ -294,8 +325,119 @@ async function renderMemory(id) {
           ${r.hasVoice ? `<audio src="${voiceUrl(r.id)}" controls preload="metadata"></audio>` : ""}
         </article>
       `).join("") : '<div class="empty">No additional recollections yet.</div>'}
+      ${recollectionForm}
     </section>
   `, "memories");
+
+  const form = document.querySelector("#recollection-form");
+  if (!form) return;
+
+  const voiceButton = document.querySelector("#recollection-voice-button");
+  const voicePreview = document.querySelector("#recollection-voice-preview");
+  const submitButton = document.querySelector("#recollection-submit");
+  const message = document.querySelector("#recollection-message");
+
+  let recorder = null;
+  let stream = null;
+  let chunks = [];
+  let voiceBlob = null;
+  let voiceUrlValue = null;
+
+  voiceButton?.addEventListener("click", async () => {
+    if (recorder && recorder.state === "recording") {
+      recorder.stop();
+      voiceButton.textContent = "● Record this recollection";
+      submitButton.disabled = false;
+      return;
+    }
+
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recorder = new MediaRecorder(stream);
+      chunks = [];
+
+      recorder.addEventListener("dataavailable", event => {
+        if (event.data.size > 0) chunks.push(event.data);
+      });
+
+      recorder.addEventListener("stop", () => {
+        voiceBlob = new Blob(chunks, {
+          type: recorder.mimeType || "audio/webm"
+        });
+
+        stream?.getTracks().forEach(track => track.stop());
+        stream = null;
+
+        if (voiceUrlValue) URL.revokeObjectURL(voiceUrlValue);
+        voiceUrlValue = URL.createObjectURL(voiceBlob);
+
+        voicePreview.innerHTML = `
+          <div class="voice-upload-preview">
+            <strong>Voice recollection ready</strong>
+            <audio src="${voiceUrlValue}" controls preload="metadata"></audio>
+            <button type="button" id="remove-recollection-voice" class="text-button">Remove recording</button>
+          </div>
+        `;
+
+        document.querySelector("#remove-recollection-voice")?.addEventListener("click", () => {
+          voiceBlob = null;
+          if (voiceUrlValue) URL.revokeObjectURL(voiceUrlValue);
+          voiceUrlValue = null;
+          voicePreview.innerHTML = "";
+        });
+      });
+
+      recorder.start();
+      voiceButton.textContent = "■ Stop recording";
+      submitButton.disabled = true;
+      message.innerHTML = "";
+    } catch {
+      message.innerHTML = '<div class="error">Microphone access was not available on this device.</div>';
+    }
+  });
+
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    const data = new FormData(form);
+    const story = String(data.get("story") || "").trim();
+
+    if (!story && !voiceBlob) {
+      message.innerHTML = '<div class="error">Write what you remember or record your recollection.</div>';
+      return;
+    }
+
+    if (voiceBlob) {
+      data.append(
+        "voice",
+        new File([voiceBlob], "family-recollection.webm", {
+          type: voiceBlob.type || "audio/webm"
+        })
+      );
+    }
+
+    submitButton.disabled = true;
+    submitButton.textContent = "Saving recollection…";
+    message.innerHTML = "";
+
+    try {
+      await api("/memories/" + encodeURIComponent(id) + "/recollections", {
+        method: "POST",
+        body: data
+      });
+
+      form.reset();
+      voiceBlob = null;
+      if (voiceUrlValue) URL.revokeObjectURL(voiceUrlValue);
+      voiceUrlValue = null;
+      voicePreview.innerHTML = "";
+      message.innerHTML = '<div class="success">Your recollection was saved and is waiting for family review.</div>';
+    } catch (error) {
+      message.innerHTML = '<div class="error">' + escapeHtml(error.message || "Could not save recollection.") + '</div>';
+    } finally {
+      submitButton.disabled = false;
+      submitButton.textContent = "Share what I remember";
+    }
+  });
 }
 
 async function renderPeople() {
@@ -686,6 +828,144 @@ async function renderContribute() {
       submitButton.disabled = false;
       submitButton.textContent = "Share this Memory";
     }
+  });
+}
+
+async function renderCurate() {
+  if (currentUser?.role !== "admin" && currentUser?.role !== "curator") {
+    location.hash = "#/memories";
+    return;
+  }
+
+  shell('<div class="loading">Opening the family review queue…</div>', "curate");
+  const { memories, recollections } = await api("/curate");
+
+  const mediaIds = memories.flatMap(memory => memory.media.map(item => item.id));
+  const voiceIds = recollections.filter(item => item.hasVoice).map(item => item.id);
+  await refreshTickets(mediaIds, voiceIds);
+
+  const allCaughtUp = memories.length === 0 && recollections.length === 0;
+
+  shell(`
+    <section class="hero">
+      <p class="eyebrow">FAMILY CURATOR</p>
+      <h1>Stories waiting for review</h1>
+      <p>Review new Memories and Family Recollections before they join the shared archive.</p>
+    </section>
+
+    ${allCaughtUp ? `
+      <div class="empty">
+        <strong>ALL CAUGHT UP</strong><br>
+        No family stories are waiting for review.
+      </div>
+    ` : ""}
+
+    ${memories.length ? `
+      <section class="review-section">
+        <div class="review-section-heading">
+          <p class="eyebrow">NEW MEMORIES</p>
+          <h2>${memories.length} waiting</h2>
+        </div>
+
+        <div class="review-list">
+          ${memories.map(memory => `
+            <article class="review-card" data-review-memory="${memory.id}">
+              <div class="review-copy">
+                <p class="eyebrow">${escapeHtml(memory.dateLabel || "DATE UNKNOWN")} · ${escapeHtml(memory.place || "PLACE UNKNOWN")}</p>
+                <h2>${escapeHtml(memory.title)}</h2>
+                <p>${escapeHtml(memory.story || "No written story was included.")}</p>
+                <p class="review-meta">Shared by ${escapeHtml(memory.contributor || "Family member")} · ${memory.media.length} media item${memory.media.length === 1 ? "" : "s"}</p>
+                ${memory.people?.length ? `<p class="review-meta">${escapeHtml(memory.people.map(person => person.displayName).join(" · "))}</p>` : ""}
+              </div>
+
+              ${memory.media.length ? `
+                <div class="review-media-grid">
+                  ${memory.media.map(item => {
+                    const src = mediaUrl(item.id);
+                    if (item.kind === "photo") {
+                      return `<img src="${src}" alt="${escapeHtml(item.caption || item.originalFilename)}" loading="lazy" />`;
+                    }
+                    if (item.kind === "video") {
+                      return `<video src="${src}" controls preload="metadata"></video>`;
+                    }
+                    return `<audio src="${src}" controls preload="metadata"></audio>`;
+                  }).join("")}
+                </div>
+              ` : ""}
+
+              <div class="review-actions">
+                <button class="button button-primary" data-memory-decision="approved" data-id="${memory.id}">Approve</button>
+                <button class="button button-secondary" data-memory-decision="rejected" data-id="${memory.id}">Reject</button>
+                <div class="review-message"></div>
+              </div>
+            </article>
+          `).join("")}
+        </div>
+      </section>
+    ` : ""}
+
+    ${recollections.length ? `
+      <section class="review-section">
+        <div class="review-section-heading">
+          <p class="eyebrow">FAMILY RECOLLECTIONS</p>
+          <h2>${recollections.length} waiting</h2>
+        </div>
+
+        <div class="review-list">
+          ${recollections.map(item => `
+            <article class="review-card" data-review-recollection="${item.id}">
+              <div class="review-copy">
+                <p class="eyebrow">ADDITIONAL PERSPECTIVE</p>
+                <h2>${escapeHtml(item.contributor)} remembers…</h2>
+                ${item.story ? `<blockquote class="review-recollection-quote">“${escapeHtml(item.story)}”</blockquote>` : ""}
+                <p class="review-meta">On Memory: <strong>${escapeHtml(item.memoryTitle || "Untitled Memory")}</strong>${item.ageAtMemory ? " · About " + escapeHtml(item.ageAtMemory) + " at the time" : ""}</p>
+                ${item.hasVoice ? `<audio class="review-audio" src="${voiceUrl(item.id)}" controls preload="metadata"></audio>` : ""}
+              </div>
+
+              <div class="review-actions">
+                <button class="button button-primary" data-recollection-decision="approved" data-id="${item.id}">Approve</button>
+                <button class="button button-secondary" data-recollection-decision="rejected" data-id="${item.id}">Reject</button>
+                <div class="review-message"></div>
+              </div>
+            </article>
+          `).join("")}
+        </div>
+      </section>
+    ` : ""}
+  `, "curate");
+
+  async function decide(kind, id, status, button) {
+    const card = button.closest(".review-card");
+    const buttons = card.querySelectorAll("button");
+    const message = card.querySelector(".review-message");
+    buttons.forEach(item => item.disabled = true);
+    message.innerHTML = "";
+
+    try {
+      await api("/curate/" + kind + "/" + encodeURIComponent(id), {
+        method: "POST",
+        body: JSON.stringify({ status })
+      });
+
+      card.classList.add("review-resolved");
+      message.innerHTML = '<div class="success">' + (status === "approved" ? "Approved." : "Rejected.") + '</div>';
+      setTimeout(() => renderCurate(), 250);
+    } catch (error) {
+      message.innerHTML = '<div class="error">' + escapeHtml(error.message || "Could not save review decision.") + '</div>';
+      buttons.forEach(item => item.disabled = false);
+    }
+  }
+
+  document.querySelectorAll("[data-memory-decision]").forEach(button => {
+    button.addEventListener("click", () => {
+      decide("memories", button.dataset.id, button.dataset.memoryDecision, button);
+    });
+  });
+
+  document.querySelectorAll("[data-recollection-decision]").forEach(button => {
+    button.addEventListener("click", () => {
+      decide("recollections", button.dataset.id, button.dataset.recollectionDecision, button);
+    });
   });
 }
 
@@ -1249,6 +1529,7 @@ async function render() {
   try {
     if (section === "memories" && parts[1]) return await renderMemory(parts[1]);
     if (section === "timeline") return await renderTimeline();
+    if (section === "curate") return await renderCurate();
     if (section === "scans" && parts[1]) return await renderScanBatch(parts[1]);
     if (section === "scans") return await renderScans();
     if (section === "family-access") return await renderFamilyAccess();
