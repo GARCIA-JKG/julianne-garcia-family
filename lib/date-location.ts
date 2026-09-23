@@ -78,6 +78,19 @@ function normalizePlaceQuery(place: StructuredPlace) {
     .trim();
 }
 
+let lastExternalGeocodeAt = 0;
+
+async function waitForGeocoderSlot() {
+  const elapsed = Date.now() - lastExternalGeocodeAt;
+  const wait = Math.max(0, 1100 - elapsed);
+
+  if (wait > 0) {
+    await new Promise((resolve) => setTimeout(resolve, wait));
+  }
+
+  lastExternalGeocodeAt = Date.now();
+}
+
 export async function geocodePlace(place: StructuredPlace) {
   const normalizedQuery = normalizePlaceQuery(place);
   if (!normalizedQuery) return null;
@@ -112,6 +125,8 @@ export async function geocodePlace(place: StructuredPlace) {
   url.searchParams.set("q", place.label ?? normalizedQuery);
 
   try {
+    await waitForGeocoderSlot();
+
     const response = await fetch(url, {
       headers: {
         "User-Agent": "JulianneGarciaFamily/0.2"
