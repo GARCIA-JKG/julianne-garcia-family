@@ -339,3 +339,31 @@ button,input{font:inherit}
     min-width: 200px;
   }
 }
+
+
+/* Public curation + Family Recollections */
+
+.review-section{margin-top:42px}
+.review-section-heading{margin-bottom:18px}
+.review-section-heading h2{margin:0;font:500 34px Georgia,serif}
+.review-list{display:grid;gap:18px}
+.review-card{padding:24px;display:grid;gap:18px;background:rgba(255,250,240,.78);border:1px solid var(--line);transition:opacity .2s ease}
+.review-card h2{margin:0 0 8px;font:500 30px Georgia,serif}
+.review-card p{line-height:1.6}
+.review-meta{color:var(--muted);font-size:12px}
+.review-media-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.review-media-grid img,.review-media-grid video{width:100%;aspect-ratio:1/1;object-fit:cover;background:#252925}
+.review-media-grid audio{width:100%;grid-column:1/-1}
+.review-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.review-actions .review-message{flex-basis:100%}
+.review-recollection-quote{margin:14px 0;padding-left:16px;border-left:2px solid var(--rust);font:18px/1.65 Georgia,serif}
+.review-audio{width:100%;margin-top:10px}
+.review-resolved{opacity:.55}
+.recollection-form{margin-top:28px;padding:24px;display:grid;gap:14px;background:rgba(49,72,59,.045);border:1px solid var(--line)}
+.recollection-form-heading h3{margin:0 0 8px;font:500 29px Georgia,serif}
+.recollection-form-heading p:not(.eyebrow){margin:0;color:var(--muted);line-height:1.6}
+.recollection-form label{display:grid;gap:7px;font-size:13px;font-weight:700}
+.recollection-form input,.recollection-form textarea{width:100%;padding:13px 14px;color:var(--ink);background:#fffdf8;border:1px solid var(--line)}
+.recollection-voice{display:grid;gap:10px}
+.optional{color:var(--muted);font-weight:400}
+@media(max-width:640px){.review-card{padding:18px}.review-media-grid{grid-template-columns:repeat(2,1fr)}}
