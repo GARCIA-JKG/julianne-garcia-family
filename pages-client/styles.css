@@ -179,3 +179,163 @@ button,input{font:inherit}
 .family-reset-message{grid-column:1/-1}
 .current-account-note{color:var(--muted);font-size:12px}
 @media(max-width:760px){.family-user-row{grid-template-columns:1fr}.family-reset-form{grid-template-columns:1fr}}
+
+
+/* Generational Family Tree */
+
+.family-tree-page,
+.family-tree-hero {
+  max-width: 1180px;
+}
+
+.family-tree {
+  position: relative;
+  display: grid;
+  gap: 34px;
+  margin-top: 34px;
+}
+
+.family-generation {
+  position: relative;
+  padding-top: 14px;
+}
+
+.family-generation:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -34px;
+  width: 1px;
+  height: 34px;
+  background: var(--line);
+}
+
+.generation-marker {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.generation-marker::before,
+.generation-marker::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: var(--line);
+}
+
+.generation-people {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  padding: 18px 10px 8px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.generation-people::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 7%;
+  right: 7%;
+  height: 1px;
+  background: var(--line);
+}
+
+.family-tree-person {
+  position: relative;
+  min-width: 220px;
+  max-width: 260px;
+  padding: 18px;
+  display: flex;
+  gap: 13px;
+  align-items: center;
+  text-decoration: none;
+  background: rgba(255,250,240,.80);
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 24px rgba(42,37,31,.05);
+}
+
+.family-tree-person::before {
+  content: "";
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  width: 1px;
+  height: 18px;
+  background: var(--line);
+}
+
+.family-tree-person:hover {
+  border-color: var(--forest-soft);
+  transform: translateY(-1px);
+}
+
+.family-tree-monogram {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #eee7da;
+  background: var(--forest);
+  font: 500 18px Georgia, serif;
+}
+
+.family-tree-person-copy {
+  min-width: 0;
+}
+
+.family-tree-person-copy h2 {
+  margin: 0 0 4px;
+  font: 500 20px Georgia, serif;
+}
+
+.family-tree-person-copy p {
+  margin: 1px 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.family-tree-person-copy span {
+  display: block;
+  margin-top: 7px;
+  color: var(--forest);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+@media (max-width: 720px) {
+  .family-tree {
+    gap: 26px;
+  }
+
+  .family-generation:not(:last-child)::after {
+    bottom: -26px;
+    height: 26px;
+  }
+
+  .generation-people {
+    justify-content: flex-start;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+  .generation-people::before {
+    left: 4px;
+    right: 4px;
+  }
+
+  .family-tree-person {
+    min-width: 200px;
+  }
+}
