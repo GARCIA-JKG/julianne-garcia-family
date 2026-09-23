@@ -4,6 +4,7 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
+import { verifyAssetTicket } from "@/lib/asset-ticket";
 import { query } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -13,14 +14,22 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = await getCurrentUser();
+  const { id } = await params;
+  const url = new URL(request.url);
+  const ticket = url.searchParams.get("ticket");
+  const ticketPayload = ticket
+    ? verifyAssetTicket(ticket, "recollection", id)
+    : null;
 
-  if (!user) {
+  const user = ticketPayload ? null : await getCurrentUser();
+
+  if (!ticketPayload && !user) {
     return NextResponse.json({ error: "Please sign in." }, { status: 401 });
   }
 
-  const { id } = await params;
-  const privileged = user.role === "admin" || user.role === "curator";
+  const privileged =
+    user?.role === "admin" || user?.role === "curator";
+  const userId = ticketPayload?.userId ?? user?.id ?? null;
 
   const result = await query<{
     voice_storage_path: string;
@@ -35,12 +44,13 @@ export async function GET(
      WHERE id = $1
        AND voice_storage_path IS NOT NULL
        AND (
-         status = 'approved'
+         $4::boolean = true
+         OR status = 'approved'
          OR contributed_by = $2
          OR $3::boolean = true
        )
      LIMIT 1`,
-    [id, user.id, privileged]
+    [id, userId, privileged, Boolean(ticketPayload)]
   );
 
   const voice = result.rows[0];
