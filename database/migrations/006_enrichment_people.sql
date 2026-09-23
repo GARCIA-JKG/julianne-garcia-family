@@ -1,3 +1,6 @@
+ALTER TABLE media
+  ADD COLUMN IF NOT EXISTS archived boolean NOT NULL DEFAULT false;
+
 ALTER TABLE memories
   ADD COLUMN IF NOT EXISTS cover_media_id uuid REFERENCES media(id) ON DELETE SET NULL;
 
