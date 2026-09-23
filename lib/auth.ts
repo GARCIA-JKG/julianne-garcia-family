@@ -33,7 +33,7 @@ export async function createSession(userId: string) {
   store.set(COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: process.env.SESSION_COOKIE_SECURE === "true",
     path: "/",
     maxAge: SESSION_DAYS * 24 * 60 * 60
   });
@@ -73,7 +73,6 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 
   const user = result.rows[0];
   if (!user) {
-    store.delete(COOKIE_NAME);
     return null;
   }
 
