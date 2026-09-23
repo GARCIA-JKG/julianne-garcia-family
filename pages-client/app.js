@@ -103,9 +103,15 @@ function shell(content, active = "") {
     nav.push(["scans", "Scan Inbox"]);
   }
 
+  if (currentUser?.role === "admin") {
+    nav.push(["family-access", "Family Access"]);
+  }
+
   if (currentUser?.role !== "viewer") {
     nav.push(["contribute", "Share a Memory"]);
   }
+
+  nav.push(["account", "Account"]);
 
   app.innerHTML = `
     <div class="shell">
@@ -146,6 +152,9 @@ function renderLogin(message = "") {
           ${message ? `<div class="error">${escapeHtml(message)}</div>` : ""}
           <button class="button button-primary">Family sign in</button>
         </form>
+        <p class="login-help">
+          Forgot your password? Ask the family administrator to reset it.
+        </p>
       </section>
     </div>
   `;
@@ -951,6 +960,206 @@ async function renderScanBatch(id) {
   });
 }
 
+async function renderAccount() {
+  shell(`
+    <section class="hero account-hero">
+      <p class="eyebrow">YOUR FAMILY ACCOUNT</p>
+      <h1>${escapeHtml(currentUser.displayName)}</h1>
+      <p>${escapeHtml(currentUser.email)} · ${escapeHtml(currentUser.role)}</p>
+    </section>
+
+    <section class="account-panel">
+      <h2>Change your password</h2>
+      <p>Use a password you do not reuse on another website. Changing it signs out your other family-archive sessions.</p>
+
+      <form id="account-password-form" class="account-form">
+        <label>
+          Current password
+          <input name="currentPassword" type="password" autocomplete="current-password" required />
+        </label>
+        <label>
+          New password
+          <input name="newPassword" type="password" autocomplete="new-password" minlength="12" maxlength="200" required />
+        </label>
+        <label>
+          Confirm new password
+          <input name="confirmPassword" type="password" autocomplete="new-password" minlength="12" maxlength="200" required />
+        </label>
+        <div id="account-password-message"></div>
+        <button class="button button-primary">Change password</button>
+      </form>
+    </section>
+  `, "account");
+
+  document.querySelector("#account-password-form")?.addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const message = document.querySelector("#account-password-message");
+    const button = form.querySelector("button");
+    const next = String(data.get("newPassword") || "");
+    const confirm = String(data.get("confirmPassword") || "");
+
+    message.innerHTML = "";
+
+    if (next !== confirm) {
+      message.innerHTML = '<div class="error">New passwords do not match.</div>';
+      return;
+    }
+
+    button.disabled = true;
+    button.textContent = "Changing…";
+
+    try {
+      await api("/account/password", {
+        method: "POST",
+        body: JSON.stringify({
+          currentPassword: data.get("currentPassword"),
+          newPassword: next
+        })
+      });
+
+      form.reset();
+      message.innerHTML = '<div class="success">Password updated. Other sessions were signed out.</div>';
+    } catch (error) {
+      message.innerHTML = '<div class="error">' + escapeHtml(error.message || "Could not change password.") + '</div>';
+    } finally {
+      button.disabled = false;
+      button.textContent = "Change password";
+    }
+  });
+}
+
+async function renderFamilyAccess() {
+  if (currentUser?.role !== "admin") {
+    location.hash = "#/memories";
+    return;
+  }
+
+  shell('<div class="loading">Opening family access…</div>', "family-access");
+  const { users } = await api("/admin/users");
+
+  shell(`
+    <section class="hero">
+      <p class="eyebrow">FAMILY ACCESS</p>
+      <h1>Family accounts</h1>
+      <p>Create private accounts for relatives and reset a password when someone gets locked out.</p>
+    </section>
+
+    <section class="family-access-layout">
+      <form id="create-family-user-form" class="account-panel family-user-create">
+        <h2>Create family account</h2>
+        <div class="field-grid">
+          <label>
+            Name
+            <input name="displayName" required maxlength="120" />
+          </label>
+          <label>
+            Email
+            <input name="email" type="email" required maxlength="254" />
+          </label>
+          <label>
+            Temporary password
+            <input name="password" type="password" required minlength="12" maxlength="200" autocomplete="new-password" />
+          </label>
+          <label>
+            Role
+            <select name="role">
+              <option value="family">Family — view and contribute</option>
+              <option value="curator">Curator — review memories</option>
+              <option value="viewer">Viewer — browse only</option>
+            </select>
+          </label>
+        </div>
+        <div id="create-family-user-message"></div>
+        <button class="button button-primary">Create family account</button>
+      </form>
+
+      <section class="family-user-list">
+        ${users.map(user => `
+          <article class="family-user-row">
+            <div class="family-user-identity">
+              <strong>${escapeHtml(user.displayName)}</strong>
+              <span>${escapeHtml(user.email)}</span>
+              <small>${escapeHtml(user.role)}${user.active ? "" : " · inactive"}</small>
+            </div>
+
+            ${user.id !== currentUser.id ? `
+              <form class="family-reset-form" data-user-id="${user.id}">
+                <label>
+                  New temporary password
+                  <input name="newPassword" type="password" minlength="12" maxlength="200" autocomplete="new-password" required ${user.active ? "" : "disabled"} />
+                </label>
+                <button class="button button-secondary" ${user.active ? "" : "disabled"}>Reset password</button>
+                <div class="family-reset-message"></div>
+              </form>
+            ` : '<span class="current-account-note">Your account · change password under Account</span>'}
+          </article>
+        `).join("")}
+      </section>
+    </section>
+  `, "family-access");
+
+  document.querySelector("#create-family-user-form")?.addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const message = document.querySelector("#create-family-user-message");
+    const button = form.querySelector("button");
+    message.innerHTML = "";
+    button.disabled = true;
+    button.textContent = "Creating…";
+
+    try {
+      await api("/admin/users", {
+        method: "POST",
+        body: JSON.stringify({
+          displayName: data.get("displayName"),
+          email: data.get("email"),
+          password: data.get("password"),
+          role: data.get("role")
+        })
+      });
+
+      await renderFamilyAccess();
+    } catch (error) {
+      message.innerHTML = '<div class="error">' + escapeHtml(error.message || "Could not create family account.") + '</div>';
+      button.disabled = false;
+      button.textContent = "Create family account";
+    }
+  });
+
+  document.querySelectorAll(".family-reset-form").forEach(form => {
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      const userId = form.dataset.userId;
+      const data = new FormData(form);
+      const message = form.querySelector(".family-reset-message");
+      const button = form.querySelector("button");
+      message.innerHTML = "";
+      button.disabled = true;
+      button.textContent = "Resetting…";
+
+      try {
+        await api("/admin/users/" + encodeURIComponent(userId) + "/password", {
+          method: "POST",
+          body: JSON.stringify({
+            newPassword: data.get("newPassword")
+          })
+        });
+
+        form.reset();
+        message.innerHTML = '<div class="success">Password reset. Existing sessions for this account were signed out.</div>';
+      } catch (error) {
+        message.innerHTML = '<div class="error">' + escapeHtml(error.message || "Could not reset password.") + '</div>';
+      } finally {
+        button.disabled = false;
+        button.textContent = "Reset password";
+      }
+    });
+  });
+}
+
 async function renderPlaces() {
   shell('<div class="loading">Mapping family history…</div>', "places");
   const { places } = await api("/places");
@@ -1015,6 +1224,8 @@ async function render() {
     if (section === "timeline") return await renderTimeline();
     if (section === "scans" && parts[1]) return await renderScanBatch(parts[1]);
     if (section === "scans") return await renderScans();
+    if (section === "family-access") return await renderFamilyAccess();
+    if (section === "account") return await renderAccount();
     if (section === "contribute") return await renderContribute();
     if (section === "people" && parts[1]) return await renderPerson(parts[1]);
     if (section === "people") return await renderPeople();

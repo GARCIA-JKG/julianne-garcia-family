@@ -157,3 +157,25 @@ button,input{font:inherit}
 .scan-selection-count strong{color:var(--forest);font:500 28px Georgia,serif}
 @media(max-width:800px){.scan-upload-panel,.scan-batch-card{grid-template-columns:1fr}.scan-batch-stats{justify-content:flex-start}.scan-toolbar{align-items:flex-start;flex-direction:column}.scan-grid{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:520px){.scan-grid{grid-template-columns:repeat(2,1fr)}}
+
+
+.login-help{margin-top:18px!important;padding-top:14px;border-top:1px solid var(--line);font-size:12px!important}
+.account-hero{margin-bottom:28px}
+.account-panel{max-width:760px;padding:26px;background:rgba(255,250,240,.72);border:1px solid var(--line)}
+.account-panel h2{margin:0 0 8px;font:500 31px Georgia,serif}
+.account-panel>p{color:var(--muted);margin:0 0 18px}
+.account-form{display:grid;gap:14px}
+.account-form label,.family-user-create label,.family-reset-form label{display:grid;gap:7px;font-size:13px;font-weight:700}
+.account-form input,.family-user-create input,.family-user-create select,.family-reset-form input{width:100%;padding:13px 14px;color:var(--ink);background:#fffdf8;border:1px solid var(--line)}
+.family-access-layout{display:grid;gap:26px}
+.family-user-create{max-width:none}
+.family-user-list{display:grid;gap:12px}
+.family-user-row{padding:20px;display:grid;grid-template-columns:minmax(220px,.8fr) minmax(280px,1.2fr);gap:22px;align-items:center;background:rgba(255,250,240,.68);border:1px solid var(--line)}
+.family-user-identity strong,.family-user-identity span,.family-user-identity small{display:block}
+.family-user-identity strong{font:500 21px Georgia,serif}
+.family-user-identity span{color:var(--muted);font-size:13px}
+.family-user-identity small{margin-top:4px;color:var(--forest);text-transform:capitalize}
+.family-reset-form{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}
+.family-reset-message{grid-column:1/-1}
+.current-account-note{color:var(--muted);font-size:12px}
+@media(max-width:760px){.family-user-row{grid-template-columns:1fr}.family-reset-form{grid-template-columns:1fr}}
