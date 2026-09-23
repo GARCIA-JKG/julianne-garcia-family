@@ -5,18 +5,20 @@ import { assertSameOrigin, cleanText } from "@/lib/security";
 
 export const runtime = "nodejs";
 
-const allowedLabels = new Set([
-  "parent",
-  "child",
-  "spouse",
-  "sibling",
-  "grandparent",
-  "grandchild",
-  "aunt/uncle",
-  "niece/nephew",
-  "cousin",
-  "other family"
-]);
+const reciprocalLabels: Record<string, string> = {
+  parent: "child",
+  child: "parent",
+  spouse: "spouse",
+  sibling: "sibling",
+  grandparent: "grandchild",
+  grandchild: "grandparent",
+  "aunt/uncle": "niece/nephew",
+  "niece/nephew": "aunt/uncle",
+  cousin: "cousin",
+  "other family": "other family"
+};
+
+const allowedLabels = new Set(Object.keys(reciprocalLabels));
 
 export async function POST(
   request: Request,
@@ -55,6 +57,17 @@ export async function POST(
        VALUES ($1, $2, $3)
        ON CONFLICT DO NOTHING`,
       [id, relatedPersonId, label]
+    );
+
+    await query(
+      `INSERT INTO person_relationships (
+         person_id,
+         related_person_id,
+         relationship_label
+       )
+       VALUES ($1, $2, $3)
+       ON CONFLICT DO NOTHING`,
+      [relatedPersonId, id, reciprocalLabels[label]]
     );
 
     return NextResponse.json({ ok: true });
