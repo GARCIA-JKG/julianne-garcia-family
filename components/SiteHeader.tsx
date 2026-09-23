@@ -21,6 +21,7 @@ export async function SiteHeader() {
             <Link href="/memories">Memories</Link>
             <Link href="/timeline">Timeline</Link>
             <Link href="/people">People</Link>
+            <Link href="/places">Places</Link>
             {["admin", "curator"].includes(user.role) && <Link href="/admin">Curate</Link>}
             {["admin", "curator"].includes(user.role) && <Link href="/admin/scans">Scan Inbox</Link>}
             {user.role === "admin" && <Link href="/admin/users">Family Access</Link>}
