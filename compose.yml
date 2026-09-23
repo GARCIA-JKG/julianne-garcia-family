@@ -1,0 +1,70 @@
+name: julianne-garcia-family
+
+services:
+  database:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TZ: ${TZ}
+    volumes:
+      - type: bind
+        source: /srv/julianne-garcia-family/database
+        target: /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - family-private
+    cpus: 0.75
+    mem_limit: 1g
+
+  web:
+    build:
+      context: .
+    restart: unless-stopped
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      TZ: ${TZ}
+      SITE_NAME: ${SITE_NAME}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DATABASE_HOST: database
+      SESSION_SECRET: ${SESSION_SECRET}
+    ports:
+      - "${APP_PORT}:3000"
+    volumes:
+      - type: bind
+        source: ${MEDIA_ROOT}/master-scans
+        target: /media/master-scans
+        read_only: true
+      - type: bind
+        source: ${MEDIA_ROOT}/master-videos
+        target: /media/master-videos
+        read_only: true
+      - type: bind
+        source: ${MEDIA_ROOT}/family-uploads
+        target: /media/uploads
+      - type: bind
+        source: ${MEDIA_ROOT}/processed
+        target: /media/processed
+      - type: bind
+        source: ${MEDIA_ROOT}/imports
+        target: /media/imports
+    networks:
+      - family-private
+    cpus: 1.5
+    mem_limit: 2g
+
+networks:
+  family-private:
+    driver: bridge
