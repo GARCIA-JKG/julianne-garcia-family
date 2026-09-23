@@ -303,7 +303,12 @@ async function renderMemory(id) {
     : "";
 
   shell(`
-    <p><a href="#/memories">← Back to Memories</a></p>
+    <div class="detail-toolbar">
+      <a href="#/memories">← Back to Memories</a>
+      ${currentUser?.role === "admin" || currentUser?.role === "curator"
+        ? `<a class="button button-secondary" href="#/memories/${id}/edit">Edit & enrich</a>`
+        : ""}
+    </div>
     <section class="memory-layout">
       <div class="media-stack">${mediaHtml || '<div class="empty">This Memory is told in words.</div>'}</div>
       <aside class="story-panel">
@@ -440,6 +445,179 @@ async function renderMemory(id) {
   });
 }
 
+async function renderMemoryEdit(id) {
+  if (currentUser?.role !== "admin" && currentUser?.role !== "curator") {
+    location.hash = "#/memories/" + id;
+    return;
+  }
+
+  shell('<div class="loading">Opening curator workspace…</div>', "memories");
+  const { memory, history } = await api("/edit/memories/" + encodeURIComponent(id));
+  await refreshTickets(memory.media.map(item => item.id), []);
+
+  const monthYear = memory.memoryYear && memory.memoryMonth
+    ? String(memory.memoryYear).padStart(4, "0") + "-" + String(memory.memoryMonth).padStart(2, "0")
+    : "";
+
+  shell(`
+    <div class="detail-toolbar">
+      <a href="#/memories/${memory.id}">← Back to Memory</a>
+    </div>
+
+    <section class="hero edit-hero">
+      <p class="eyebrow">CURATOR WORKSPACE</p>
+      <h1>Edit & enrich</h1>
+      <p>Improve <strong>${escapeHtml(memory.title)}</strong> as the family learns more. Originals remain preserved even when visible media is archived.</p>
+    </section>
+
+    <form id="memory-edit-form" class="editor-panel">
+      <label>Memory title<input name="title" required maxlength="180" value="${escapeHtml(memory.title)}" /></label>
+      <label>Main story<textarea name="story" rows="8" maxlength="12000">${escapeHtml(memory.story || "")}</textarea></label>
+
+      <div class="field-grid">
+        <label>Month / year<input name="monthYear" type="month" min="1000-01" max="2200-12" value="${escapeHtml(monthYear)}" /></label>
+        <label>City / town<input name="locality" maxlength="120" value="${escapeHtml(memory.locality || "")}" /></label>
+        <label>State / province / region<input name="region" maxlength="120" value="${escapeHtml(memory.region || "")}" /></label>
+        <label>Country<input name="country" maxlength="120" value="${escapeHtml(memory.country || "")}" /></label>
+      </div>
+
+      <label>People in this Memory<input name="people" maxlength="1000" value="${escapeHtml(memory.people.map(person => person.displayName).join(", "))}" /></label>
+      <label>Add more photos, video, or audio<input name="media" type="file" multiple accept="image/*,video/*,audio/*,.heic,.heif,.avif" /></label>
+      <label>Change summary<input name="changeSummary" maxlength="240" placeholder="Identified Aunt Maria and corrected the date" /></label>
+      <div id="memory-edit-message"></div>
+      <button class="button button-primary">Save Memory changes</button>
+    </form>
+
+    ${memory.media.length ? `
+      <section class="editor-section">
+        <div class="editor-section-heading">
+          <p class="eyebrow">MEDIA DETAILS</p>
+          <h2>Captions, order & cover</h2>
+        </div>
+        <div class="media-editor-grid">
+          ${memory.media.map((item, index) => {
+            const src = mediaUrl(item.id);
+            return `
+              <form class="media-editor-card" data-media-id="${item.id}">
+                <div class="media-editor-preview">
+                  ${item.kind === "photo"
+                    ? `<img src="${src}" alt="${escapeHtml(item.caption || item.originalFilename)}" />`
+                    : item.kind === "video"
+                      ? `<video src="${src}" controls preload="metadata"></video>`
+                      : `<audio src="${src}" controls preload="metadata"></audio>`
+                  }
+                </div>
+                <label>Caption<textarea name="caption" rows="3" maxlength="1000">${escapeHtml(item.caption || "")}</textarea></label>
+                <label>Display order<input name="sortOrder" type="number" min="0" max="999" value="${Number.isFinite(item.sortOrder) ? item.sortOrder : index}" /></label>
+                ${item.kind === "photo" ? `
+                  <label class="cover-checkbox">
+                    <input name="makeCover" type="checkbox" ${item.id === memory.coverMediaId ? "checked" : ""} />
+                    Use as cover photo
+                  </label>
+                ` : ""}
+                <div class="media-editor-actions">
+                  <button class="button button-secondary" type="submit">Save media details</button>
+                  <button class="button danger-button" type="button" data-archive-media="${item.id}">Archive from Memory</button>
+                </div>
+                <div class="media-editor-message"></div>
+              </form>
+            `;
+          }).join("")}
+        </div>
+      </section>
+    ` : ""}
+
+    <section class="editor-section">
+      <div class="editor-section-heading">
+        <p class="eyebrow">EDIT HISTORY</p>
+        <h2>How this Memory changed</h2>
+      </div>
+      ${history.length ? `
+        <div class="history-list">
+          ${history.map(item => `
+            <div class="history-row">
+              <div><strong>${escapeHtml(item.summary)}</strong><span>by ${escapeHtml(item.changedBy)}</span></div>
+              <time>${escapeHtml(new Date(item.createdAt).toLocaleString())}</time>
+            </div>
+          `).join("")}
+        </div>
+      ` : '<p class="meta">No curator edits have been recorded yet.</p>'}
+    </section>
+  `, "memories");
+
+  document.querySelector("#memory-edit-form")?.addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const message = document.querySelector("#memory-edit-message");
+    const button = form.querySelector("button");
+    button.disabled = true;
+    button.textContent = "Saving changes…";
+    message.innerHTML = "";
+
+    try {
+      await api("/edit/memories/" + encodeURIComponent(id), {
+        method: "PUT",
+        body: data
+      });
+      message.innerHTML = '<div class="success">Memory updated.</div>';
+      await renderMemoryEdit(id);
+    } catch (error) {
+      message.innerHTML = '<div class="error">' + escapeHtml(error.message || "Could not update Memory.") + '</div>';
+      button.disabled = false;
+      button.textContent = "Save Memory changes";
+    }
+  });
+
+  document.querySelectorAll(".media-editor-card").forEach(form => {
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      const mediaId = form.dataset.mediaId;
+      const data = new FormData(form);
+      const message = form.querySelector(".media-editor-message");
+      const button = form.querySelector('button[type="submit"]');
+      button.disabled = true;
+      button.textContent = "Saving…";
+      message.innerHTML = "";
+
+      try {
+        await api("/edit/memories/" + encodeURIComponent(id) + "/media/" + encodeURIComponent(mediaId), {
+          method: "PUT",
+          body: JSON.stringify({
+            caption: data.get("caption"),
+            sortOrder: data.get("sortOrder"),
+            makeCover: data.get("makeCover") === "on"
+          })
+        });
+        message.innerHTML = '<div class="success">Media updated.</div>';
+        await renderMemoryEdit(id);
+      } catch (error) {
+        message.innerHTML = '<div class="error">' + escapeHtml(error.message || "Could not update media.") + '</div>';
+        button.disabled = false;
+        button.textContent = "Save media details";
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-archive-media]").forEach(button => {
+    button.addEventListener("click", async () => {
+      const mediaId = button.dataset.archiveMedia;
+      if (!window.confirm("Hide this media from the Memory? The original file will remain preserved.")) return;
+      button.disabled = true;
+
+      try {
+        await api("/edit/memories/" + encodeURIComponent(id) + "/media/" + encodeURIComponent(mediaId), {
+          method: "DELETE"
+        });
+        await renderMemoryEdit(id);
+      } catch (error) {
+        window.alert(error.message || "Could not archive media.");
+        button.disabled = false;
+      }
+    });
+  });
+}
+
 async function renderPeople() {
   shell('<div class="loading">Opening family profiles…</div>', "people");
   const { people } = await api("/people");
@@ -472,7 +650,12 @@ async function renderPerson(id) {
   await refreshTickets(photos, []);
 
   shell(`
-    <p><a href="#/people">← Back to People</a></p>
+    <div class="detail-toolbar">
+      <a href="#/people">← Back to People</a>
+      ${currentUser?.role === "admin" || currentUser?.role === "curator"
+        ? `<a class="button button-secondary" href="#/people/${id}/edit">Edit & enrich</a>`
+        : ""}
+    </div>
     <header class="person-hero">
       <div class="monogram">${escapeHtml(person.displayName.slice(0,1).toUpperCase())}</div>
       <div>
@@ -507,6 +690,144 @@ async function renderPerson(id) {
       </div>
     </section>
   `, "people");
+}
+
+async function renderPersonEdit(id) {
+  if (currentUser?.role !== "admin" && currentUser?.role !== "curator") {
+    location.hash = "#/people/" + id;
+    return;
+  }
+
+  shell('<div class="loading">Opening person editor…</div>', "people");
+  const { person, otherPeople } = await api("/edit/people/" + encodeURIComponent(id));
+
+  const birthMonthYear = person.birthYear && person.birthMonth
+    ? String(person.birthYear).padStart(4, "0") + "-" + String(person.birthMonth).padStart(2, "0")
+    : "";
+  const deathMonthYear = person.deathYear && person.deathMonth
+    ? String(person.deathYear).padStart(4, "0") + "-" + String(person.deathMonth).padStart(2, "0")
+    : "";
+
+  shell(`
+    <div class="detail-toolbar"><a href="#/people/${person.id}">← Back to profile</a></div>
+    <section class="hero edit-hero">
+      <p class="eyebrow">CURATOR WORKSPACE</p>
+      <h1>Enrich ${escapeHtml(person.displayName)}</h1>
+      <p>These private curator controls maintain the family structure. Relationship titles remain hidden from public-facing profiles and the Family Tree.</p>
+    </section>
+
+    <form id="person-edit-form" class="editor-panel">
+      <label>Display name<input name="displayName" required maxlength="160" value="${escapeHtml(person.displayName)}" /></label>
+      <label>Biography / life story<textarea name="biography" rows="7" maxlength="12000">${escapeHtml(person.biography || "")}</textarea></label>
+      <div class="field-grid">
+        <label>Birth month / year<input name="birthMonthYear" type="month" min="1000-01" max="2200-12" value="${escapeHtml(birthMonthYear)}" /></label>
+        <label>Death month / year<input name="deathMonthYear" type="month" min="1000-01" max="2200-12" value="${escapeHtml(deathMonthYear)}" /></label>
+      </div>
+      <label>Birth place<input name="birthPlace" maxlength="220" value="${escapeHtml(person.birthPlace || "")}" /></label>
+      <div id="person-edit-message"></div>
+      <button class="button button-primary">Save person profile</button>
+    </form>
+
+    <section class="editor-section">
+      <div class="editor-section-heading">
+        <p class="eyebrow">PRIVATE STRUCTURE</p>
+        <h2>Family connections</h2>
+        <p>These labels are used only to build the Family Tree and are not shown on the public-facing tree.</p>
+      </div>
+
+      ${person.relationships.length ? `
+        <div class="private-relations">
+          ${person.relationships.map(rel => `
+            <div><strong>${escapeHtml(rel.relatedName)}</strong><span>${escapeHtml(rel.label)}</span></div>
+          `).join("")}
+        </div>
+      ` : ""}
+
+      <form id="relationship-form" class="editor-panel compact-editor">
+        <div class="field-grid">
+          <label>Relative
+            <select name="relatedPersonId" required>
+              <option value="">Select a person</option>
+              ${otherPeople.map(item => `<option value="${item.id}">${escapeHtml(item.displayName)}</option>`).join("")}
+            </select>
+          </label>
+          <label>Relationship
+            <select name="label" required>
+              <option value="">Select relationship</option>
+              <option value="parent">Parent</option>
+              <option value="child">Child</option>
+              <option value="spouse">Spouse</option>
+              <option value="sibling">Sibling</option>
+              <option value="grandparent">Grandparent</option>
+              <option value="grandchild">Grandchild</option>
+              <option value="aunt/uncle">Aunt / Uncle</option>
+              <option value="niece/nephew">Niece / Nephew</option>
+              <option value="cousin">Cousin</option>
+              <option value="other family">Other family</option>
+            </select>
+          </label>
+        </div>
+        <div id="relationship-message"></div>
+        <button class="button button-secondary">Add relationship</button>
+      </form>
+    </section>
+  `, "people");
+
+  document.querySelector("#person-edit-form")?.addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const message = document.querySelector("#person-edit-message");
+    const button = form.querySelector("button");
+    button.disabled = true;
+    button.textContent = "Saving…";
+    message.innerHTML = "";
+
+    try {
+      await api("/edit/people/" + encodeURIComponent(id), {
+        method: "PUT",
+        body: JSON.stringify({
+          displayName: data.get("displayName"),
+          biography: data.get("biography"),
+          birthMonthYear: data.get("birthMonthYear"),
+          deathMonthYear: data.get("deathMonthYear"),
+          birthPlace: data.get("birthPlace")
+        })
+      });
+      message.innerHTML = '<div class="success">Person profile updated.</div>';
+      await renderPersonEdit(id);
+    } catch (error) {
+      message.innerHTML = '<div class="error">' + escapeHtml(error.message || "Could not update person.") + '</div>';
+      button.disabled = false;
+      button.textContent = "Save person profile";
+    }
+  });
+
+  document.querySelector("#relationship-form")?.addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const message = document.querySelector("#relationship-message");
+    const button = form.querySelector("button");
+    button.disabled = true;
+    button.textContent = "Adding…";
+    message.innerHTML = "";
+
+    try {
+      await api("/edit/people/" + encodeURIComponent(id) + "/relationships", {
+        method: "POST",
+        body: JSON.stringify({
+          relatedPersonId: data.get("relatedPersonId"),
+          label: data.get("label")
+        })
+      });
+      await renderPersonEdit(id);
+    } catch (error) {
+      message.innerHTML = '<div class="error">' + escapeHtml(error.message || "Could not add relationship.") + '</div>';
+      button.disabled = false;
+      button.textContent = "Add relationship";
+    }
+  });
 }
 
 async function renderTimeline() {
@@ -1527,6 +1848,7 @@ async function render() {
   const section = parts[0] || "memories";
 
   try {
+    if (section === "memories" && parts[1] && parts[2] === "edit") return await renderMemoryEdit(parts[1]);
     if (section === "memories" && parts[1]) return await renderMemory(parts[1]);
     if (section === "timeline") return await renderTimeline();
     if (section === "curate") return await renderCurate();
@@ -1535,6 +1857,7 @@ async function render() {
     if (section === "family-access") return await renderFamilyAccess();
     if (section === "account") return await renderAccount();
     if (section === "contribute") return await renderContribute();
+    if (section === "people" && parts[1] && parts[2] === "edit") return await renderPersonEdit(parts[1]);
     if (section === "people" && parts[1]) return await renderPerson(parts[1]);
     if (section === "people") return await renderPeople();
     if (section === "places") return await renderPlaces();
