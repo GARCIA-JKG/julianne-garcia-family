@@ -58,6 +58,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       DATABASE_HOST: database
       SESSION_SECRET: ${SESSION_SECRET}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
       MEDIA_UPLOAD_ROOT: /media/uploads
     ports:
       - "${APP_PORT}:3000"
