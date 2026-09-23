@@ -3,6 +3,10 @@ import { verifyPassword } from "@/lib/password";
 import { cleanText, normalizeEmail } from "@/lib/security";
 import { createBearerSession } from "@/lib/client-auth";
 import { clientJson, clientOptions } from "@/lib/client-cors";
+import {
+  checkClientLoginAllowed,
+  recordClientLoginAttempt
+} from "@/lib/client-login-guard";
 
 export const runtime = "nodejs";
 
@@ -16,6 +20,15 @@ export async function POST(request: Request) {
     const email = normalizeEmail(cleanText(body.email, 254));
     const password =
       typeof body.password === "string" ? body.password : "";
+
+    const guard = await checkClientLoginAllowed(request, email);
+
+    if (!guard.allowed) {
+      return clientJson(
+        { error: "Too many sign-in attempts. Please wait 15 minutes and try again." },
+        { status: 429 }
+      );
+    }
 
     const result = await query<{
       id: string;
@@ -39,11 +52,23 @@ export async function POST(request: Request) {
       !user.active ||
       !(await verifyPassword(password, user.password_hash))
     ) {
+      await recordClientLoginAttempt(
+        guard.ipHash,
+        guard.emailHash,
+        false
+      );
+
       return clientJson(
         { error: "Email or password is incorrect." },
         { status: 401 }
       );
     }
+
+    await recordClientLoginAttempt(
+      guard.ipHash,
+      guard.emailHash,
+      true
+    );
 
     const token = await createBearerSession(user.id);
 
