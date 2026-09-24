@@ -21,6 +21,11 @@ function escapeHtml(value = "") {
     .replaceAll("'", "&#039;");
 }
 
+function photoRotationStyle(item) {
+  const degrees = Number(item?.rotationDegrees || 0);
+  return "transform:rotate(" + degrees + "deg)";
+}
+
 async function api(path, options = {}) {
   const headers = new Headers(options.headers || {});
   if (token()) headers.set("Authorization", "Bearer " + token());
@@ -250,7 +255,7 @@ async function renderMemories() {
           return `
             <a class="card" href="#/memories/${memory.id}">
               <div class="card-media">
-                ${src ? `<img src="${src}" alt="${escapeHtml(photo.caption || memory.title)}" loading="lazy" />` : "◇"}
+                ${src ? `<img src="${src}" alt="${escapeHtml(photo.caption || memory.title)}" loading="lazy" style="${photoRotationStyle(photo)}" />` : "◇"}
               </div>
               <div class="card-body">
                 <p class="eyebrow">${escapeHtml(memory.dateLabel || "DATE UNKNOWN")} · ${escapeHtml(memory.place || "PLACE UNKNOWN")}</p>
@@ -277,7 +282,7 @@ async function renderMemory(id) {
   const mediaHtml = memory.media.map(item => {
     const src = mediaUrl(item.id);
     if (item.kind === "photo") {
-      return `<figure><img src="${src}" alt="${escapeHtml(item.caption || item.originalFilename)}" />${item.caption ? `<figcaption>${escapeHtml(item.caption)}</figcaption>` : ""}</figure>`;
+      return `<figure class="rotated-photo-frame"><img src="${src}" alt="${escapeHtml(item.caption || item.originalFilename)}" style="${photoRotationStyle(item)}" />${item.caption ? `<figcaption>${escapeHtml(item.caption)}</figcaption>` : ""}</figure>`;
     }
     if (item.kind === "video") {
       return `<figure><video src="${src}" controls preload="metadata"></video>${item.caption ? `<figcaption>${escapeHtml(item.caption)}</figcaption>` : ""}</figure>`;
@@ -514,7 +519,7 @@ async function renderMemoryEdit(id) {
               <form class="media-editor-card" data-media-id="${item.id}">
                 <div class="media-editor-preview">
                   ${item.kind === "photo"
-                    ? `<img src="${src}" alt="${escapeHtml(item.caption || item.originalFilename)}" />`
+                    ? `<img src="${src}" alt="${escapeHtml(item.caption || item.originalFilename)}" style="${photoRotationStyle(item)}" />`
                     : item.kind === "video"
                       ? `<video src="${src}" controls preload="metadata"></video>`
                       : `<audio src="${src}" controls preload="metadata"></audio>`
@@ -527,6 +532,14 @@ async function renderMemoryEdit(id) {
                     <input name="makeCover" type="checkbox" ${item.id === memory.coverMediaId ? "checked" : ""} />
                     Use as cover photo
                   </label>
+                ` : ""}
+                ${item.kind === "photo" ? `
+                  <div class="rotation-controls">
+                    <button class="button button-secondary" type="button" data-rotate-media="left" data-id="${item.id}">↶ Rotate left</button>
+                    <button class="button button-secondary" type="button" data-rotate-media="right" data-id="${item.id}">↷ Rotate right</button>
+                    <button class="text-button" type="button" data-rotate-media="reset" data-id="${item.id}">Reset</button>
+                    <span>${item.rotationDegrees || 0}°</span>
+                  </div>
                 ` : ""}
                 <div class="media-editor-actions">
                   <button class="button button-secondary" type="submit">Save media details</button>
@@ -611,6 +624,25 @@ async function renderMemoryEdit(id) {
         message.innerHTML = '<div class="error">' + escapeHtml(error.message || "Could not update media.") + '</div>';
         button.disabled = false;
         button.textContent = "Save media details";
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-rotate-media]").forEach(button => {
+    button.addEventListener("click", async () => {
+      const mediaId = button.dataset.id;
+      const action = button.dataset.rotateMedia;
+      button.disabled = true;
+
+      try {
+        await api("/edit/memories/" + encodeURIComponent(id) + "/media/" + encodeURIComponent(mediaId), {
+          method: "PATCH",
+          body: JSON.stringify({ action })
+        });
+        await renderMemoryEdit(id);
+      } catch (error) {
+        window.alert(error.message || "Could not rotate photo.");
+        button.disabled = false;
       }
     });
   });
@@ -1238,7 +1270,7 @@ async function renderCurate() {
                   ${memory.media.map(item => {
                     const src = mediaUrl(item.id);
                     if (item.kind === "photo") {
-                      return `<img src="${src}" alt="${escapeHtml(item.caption || item.originalFilename)}" loading="lazy" />`;
+                      return `<img src="${src}" alt="${escapeHtml(item.caption || item.originalFilename)}" loading="lazy" style="${photoRotationStyle(item)}" />`;
                     }
                     if (item.kind === "video") {
                       return `<video src="${src}" controls preload="metadata"></video>`;
@@ -1489,7 +1521,7 @@ async function renderTrash() {
             <article class="trash-card" data-trash-card="${item.id}">
               <div class="trash-preview">
                 ${item.kind === "photo"
-                  ? `<img src="${src}" alt="${escapeHtml(item.caption || item.originalFilename)}" loading="lazy" />`
+                  ? `<img src="${src}" alt="${escapeHtml(item.caption || item.originalFilename)}" loading="lazy" style="${photoRotationStyle(item)}" />`
                   : item.kind === "video"
                     ? `<video src="${src}" controls preload="metadata"></video>`
                     : `<audio src="${src}" controls preload="metadata"></audio>`
@@ -1691,13 +1723,18 @@ async function renderScanBatch(id) {
             <h2>Group scans into a Memory</h2>
             <p>Select the photos that belong together, then describe that moment once.</p>
           </div>
-          <button id="scan-select-all" class="button button-secondary" type="button">Select all</button>
+          <div class="scan-toolbar-actions">
+            <button class="button button-secondary scan-rotate-action" type="button" data-scan-rotate="left" disabled>↶ Rotate left</button>
+            <button class="button button-secondary scan-rotate-action" type="button" data-scan-rotate="right" disabled>↷ Rotate right</button>
+            <button class="button button-secondary scan-rotate-action" type="button" data-scan-rotate="reset" disabled>Reset rotation</button>
+            <button id="scan-select-all" class="button button-secondary" type="button">Select all</button>
+          </div>
         </div>
 
         <div class="scan-grid">
           ${pending.map(item => `
             <button type="button" class="scan-tile" data-scan-id="${item.id}">
-              <img src="${scanUrl(item.id)}" alt="${escapeHtml(item.originalFilename)}" loading="lazy" />
+              <img src="${scanUrl(item.id)}" alt="${escapeHtml(item.originalFilename)}" loading="lazy" style="${photoRotationStyle(item)}" />
               <span class="scan-check"></span>
               <span class="scan-name">${escapeHtml(item.originalFilename)}</span>
             </button>
@@ -1811,6 +1848,9 @@ async function renderScanBatch(id) {
     });
     if (count) count.textContent = String(selected.size);
     if (curateSubmit) curateSubmit.disabled = selected.size === 0;
+    document.querySelectorAll(".scan-rotate-action").forEach(button => {
+      button.disabled = selected.size === 0;
+    });
     if (selectAll) selectAll.textContent = selected.size === tiles.length && tiles.length ? "Clear selection" : "Select all";
   }
 
@@ -1827,6 +1867,28 @@ async function renderScanBatch(id) {
     if (selected.size === tiles.length) selected.clear();
     else tiles.forEach(tile => selected.add(tile.dataset.scanId));
     syncSelection();
+  });
+
+  document.querySelectorAll("[data-scan-rotate]").forEach(button => {
+    button.addEventListener("click", async () => {
+      if (!selected.size) return;
+      const action = button.dataset.scanRotate;
+      document.querySelectorAll(".scan-rotate-action").forEach(item => item.disabled = true);
+
+      try {
+        await api("/scans/" + encodeURIComponent(id) + "/rotate", {
+          method: "POST",
+          body: JSON.stringify({
+            itemIds: Array.from(selected),
+            action
+          })
+        });
+        await renderScanBatch(id);
+      } catch (error) {
+        window.alert(error.message || "Could not rotate selected scans.");
+        syncSelection();
+      }
+    });
   });
 
   document.querySelector("#scan-curate-form")?.addEventListener("submit", async event => {

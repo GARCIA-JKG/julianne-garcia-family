@@ -446,3 +446,16 @@ button,input{font:inherit}
 .health-details h3{margin:20px 0 8px}
 .health-details code{display:block;padding:14px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:#2a2e2a;color:#eee6da;font-size:11px}
 @media(max-width:760px){.health-grid{grid-template-columns:1fr}.health-card-wide{grid-column:auto}.backup-status-grid{grid-template-columns:1fr}.health-banner{align-items:flex-start;flex-direction:column}}
+
+
+/* Non-destructive photo rotation */
+
+.rotated-photo-frame{min-height:320px;display:grid;place-items:center;overflow:hidden}
+.rotated-photo-frame img{transform-origin:center center;transition:transform .18s ease}
+.rotation-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px;background:rgba(49,72,59,.045);border:1px solid var(--line)}
+.rotation-controls .button{padding:8px 11px;font-size:11px}
+.rotation-controls>span{margin-left:auto;color:var(--muted);font-size:11px;font-weight:700}
+.scan-toolbar-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.scan-toolbar-actions .button{padding:9px 12px;font-size:11px}
+.scan-tile img,.card-media img,.review-media-grid img,.media-editor-preview img,.trash-preview img{transform-origin:center center;transition:transform .18s ease}
+@media(max-width:700px){.rotation-controls>span{width:100%;margin-left:0}.scan-toolbar-actions{width:100%}}
