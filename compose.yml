@@ -50,10 +50,10 @@ services:
         condition: service_healthy
     user: "${APP_UID:-1000}:${APP_GID:-1000}"
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      DATABASE_HOST: database
+      PGDATABASE: ${POSTGRES_DB}
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGHOST: database
       TZ: ${TZ}
     volumes:
       - type: bind
@@ -63,20 +63,11 @@ services:
       - sh
       - -ec
       - |
-        stamp=$(date +%Y%m%d-%H%M%S)
-        tmp="/backups/database/.julianne-family-${stamp}.dump.tmp"
-        final="/backups/database/julianne-family-${stamp}.dump"
-        trap 'rm -f "$tmp"' EXIT
-        PGPASSWORD="${POSTGRES_PASSWORD}" pg_dump \
-          -h "${DATABASE_HOST}" \
-          -U "${POSTGRES_USER}" \
-          -d "${POSTGRES_DB}" \
-          -Fc \
-          -f "$tmp"
-        pg_restore --list "$tmp" >/dev/null
-        mv "$tmp" "$final"
-        trap - EXIT
-        echo "Verified database backup: $final"
+        rm -f /backups/database/.julianne-family-latest.dump.tmp
+        pg_dump -Fc -f /backups/database/.julianne-family-latest.dump.tmp
+        pg_restore --list /backups/database/.julianne-family-latest.dump.tmp >/dev/null
+        mv /backups/database/.julianne-family-latest.dump.tmp "/backups/database/julianne-family-$(date +%Y%m%d-%H%M%S).dump"
+        echo "Verified database backup created."
     networks:
       - family-private
     cpus: 0.5
