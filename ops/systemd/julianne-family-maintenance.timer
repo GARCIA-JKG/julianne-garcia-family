@@ -1,0 +1,10 @@
+[Unit]
+Description=Nightly Julianne Garcia Family archive maintenance
+
+[Timer]
+OnCalendar=*-*-* 02:15:00 Pacific/Honolulu
+Persistent=true
+Unit=julianne-family-maintenance.service
+
+[Install]
+WantedBy=timers.target
