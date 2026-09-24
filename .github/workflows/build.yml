@@ -35,7 +35,14 @@ jobs:
         run: npm run build
 
       - name: Validate Compose
-        run: docker compose --env-file .env.example config -q
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose --env-file .env.example config -q 2>compose-warnings.log
+          if grep -q "variable is not set" compose-warnings.log; then
+            cat compose-warnings.log
+            exit 1
+          fi
 
       - name: Build production container
         run: docker build -t julianne-family:test .
