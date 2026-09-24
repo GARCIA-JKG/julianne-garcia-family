@@ -40,14 +40,14 @@ export async function DELETE(
       );
     }
 
-    return clientJson({ ok: true });
+    return clientJson({
+      ok: true,
+      fileCleanupWarning: result.fileCleanupWarning
+    });
   } catch (error) {
     console.error("permanent media deletion failed", error);
     return clientJson(
-      {
-        error:
-          "The archive record was removed, but file cleanup may require an Archive Health check."
-      },
+      { error: "Could not permanently delete this Trash item." },
       { status: 500 }
     );
   }
