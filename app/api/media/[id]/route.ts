@@ -17,9 +17,13 @@ export async function GET(
   const { id } = await params;
   const url = new URL(request.url);
   const ticket = url.searchParams.get("ticket");
-  const ticketPayload = ticket
+  const mediaTicket = ticket
     ? verifyAssetTicket(ticket, "media", id)
     : null;
+  const trashTicket = ticket
+    ? verifyAssetTicket(ticket, "trash", id)
+    : null;
+  const ticketPayload = mediaTicket ?? trashTicket;
 
   const user = ticketPayload ? null : await getCurrentUser();
 
@@ -40,7 +44,16 @@ export async function GET(
        FROM media md
        JOIN memories m ON m.id = md.memory_id
       WHERE md.id = $1
-        AND md.archived = false
+        AND (
+          (
+            md.archived = false
+            AND md.trashed_at IS NULL
+          )
+          OR (
+            $5::boolean = true
+            AND md.trashed_at IS NOT NULL
+          )
+        )
         AND (
           $4::boolean = true
           OR m.status = 'approved'
@@ -48,7 +61,7 @@ export async function GET(
           OR $3::boolean = true
         )
       LIMIT 1`,
-    [id, userId, privileged, Boolean(ticketPayload)]
+    [id, userId, privileged, Boolean(ticketPayload), Boolean(trashTicket)]
   );
 
   const media = result.rows[0];
