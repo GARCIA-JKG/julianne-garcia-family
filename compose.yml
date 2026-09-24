@@ -41,6 +41,77 @@ services:
     cpus: 0.5
     mem_limit: 512m
 
+  db-backup:
+    image: postgres:17
+    restart: "no"
+    profiles: ["maintenance"]
+    depends_on:
+      database:
+        condition: service_healthy
+    user: "${APP_UID:-1000}:${APP_GID:-1000}"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DATABASE_HOST: database
+      TZ: ${TZ}
+    volumes:
+      - type: bind
+        source: ${ARCHIVE_BACKUP_ROOT:-/srv/julianne-garcia-family/backups}/database
+        target: /backups/database
+    command:
+      - sh
+      - -ec
+      - |
+        stamp=$(date +%Y%m%d-%H%M%S)
+        tmp="/backups/database/.julianne-family-${stamp}.dump.tmp"
+        final="/backups/database/julianne-family-${stamp}.dump"
+        trap 'rm -f "$tmp"' EXIT
+        PGPASSWORD="$POSTGRES_PASSWORD" pg_dump \
+          -h "$DATABASE_HOST" \
+          -U "$POSTGRES_USER" \
+          -d "$POSTGRES_DB" \
+          -Fc \
+          -f "$tmp"
+        pg_restore --list "$tmp" >/dev/null
+        mv "$tmp" "$final"
+        trap - EXIT
+        echo "Verified database backup: $final"
+    networks:
+      - family-private
+    cpus: 0.5
+    mem_limit: 512m
+
+  archive-check:
+    build:
+      context: .
+    restart: "no"
+    profiles: ["maintenance"]
+    depends_on:
+      database:
+        condition: service_healthy
+    user: "${APP_UID:-1000}:${APP_GID:-1000}"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DATABASE_HOST: database
+      MEDIA_UPLOAD_ROOT: /media/uploads
+      ARCHIVE_REPORT_PATH: /backups/health/latest.json
+      TZ: ${TZ}
+    command: ["node", "scripts/archive-check.mjs"]
+    volumes:
+      - type: bind
+        source: ${MEDIA_ROOT}/family-uploads
+        target: /media/uploads
+        read_only: true
+      - type: bind
+        source: ${ARCHIVE_BACKUP_ROOT:-/srv/julianne-garcia-family/backups}/health
+        target: /backups/health
+    networks:
+      - family-private
+    cpus: 0.5
+    mem_limit: 512m
   web:
     build:
       context: .
@@ -62,6 +133,7 @@ services:
       SESSION_SECRET: ${SESSION_SECRET}
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
       MEDIA_UPLOAD_ROOT: /media/uploads
+      ARCHIVE_BACKUP_ROOT: /backups
     ports:
       - "${APP_PORT}:3000"
     healthcheck:
@@ -88,6 +160,10 @@ services:
       - type: bind
         source: ${MEDIA_ROOT}/imports
         target: /media/imports
+      - type: bind
+        source: ${ARCHIVE_BACKUP_ROOT:-/srv/julianne-garcia-family/backups}
+        target: /backups
+        read_only: true
     networks:
       family-private:
       family-public:
