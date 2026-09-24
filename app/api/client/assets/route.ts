@@ -26,6 +26,9 @@ export async function POST(request: Request) {
   const scanIds = Array.isArray(body.scanIds)
     ? body.scanIds.filter((id: unknown): id is string => typeof id === "string").slice(0, 200)
     : [];
+  const trashIds = Array.isArray(body.trashIds)
+    ? body.trashIds.filter((id: unknown): id is string => typeof id === "string").slice(0, 100)
+    : [];
 
   const canCurate = user.role === "admin" || user.role === "curator";
 
@@ -70,6 +73,16 @@ export async function POST(request: Request) {
       )
     : { rows: [] as Array<{ id: string }> };
 
+  const trashResult = user.role === "admin" && trashIds.length
+    ? await query<{ id: string }>(
+        `SELECT id
+         FROM media
+         WHERE id = ANY($1::uuid[])
+           AND trashed_at IS NOT NULL`,
+        [trashIds]
+      )
+    : { rows: [] as Array<{ id: string }> };
+
   return clientJson({
     mediaTickets: Object.fromEntries(
       mediaResult.rows.map((row) => [
@@ -87,6 +100,12 @@ export async function POST(request: Request) {
       scanResult.rows.map((row) => [
         row.id,
         createAssetTicket("scan", row.id, user.id)
+      ])
+    ),
+    trashTickets: Object.fromEntries(
+      trashResult.rows.map((row) => [
+        row.id,
+        createAssetTicket("trash", row.id, user.id)
       ])
     )
   });

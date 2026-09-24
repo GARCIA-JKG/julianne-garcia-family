@@ -5,7 +5,7 @@ const TOKEN_KEY = "jgf_pages_token";
 const app = document.querySelector("#app");
 let currentUser = null;
 let memoriesCache = null;
-let assetsCache = { mediaTickets: {}, recollectionTickets: {}, scanTickets: {} };
+let assetsCache = { mediaTickets: {}, recollectionTickets: {}, scanTickets: {}, trashTickets: {} };
 let mapInstance = null;
 
 function token() {
@@ -44,12 +44,12 @@ async function api(path, options = {}) {
   return data;
 }
 
-async function refreshTickets(mediaIds = [], recollectionIds = [], scanIds = []) {
-  if (!mediaIds.length && !recollectionIds.length && !scanIds.length) return assetsCache;
+async function refreshTickets(mediaIds = [], recollectionIds = [], scanIds = [], trashIds = []) {
+  if (!mediaIds.length && !recollectionIds.length && !scanIds.length && !trashIds.length) return assetsCache;
 
   const result = await api("/assets", {
     method: "POST",
-    body: JSON.stringify({ mediaIds, recollectionIds, scanIds })
+    body: JSON.stringify({ mediaIds, recollectionIds, scanIds, trashIds })
   });
 
   assetsCache = {
@@ -61,6 +61,10 @@ async function refreshTickets(mediaIds = [], recollectionIds = [], scanIds = [])
     scanTickets: {
       ...assetsCache.scanTickets,
       ...(result.scanTickets || {})
+    },
+    trashTickets: {
+      ...assetsCache.trashTickets,
+      ...(result.trashTickets || {})
     }
   };
   return assetsCache;
@@ -87,6 +91,13 @@ function scanUrl(id) {
     : "";
 }
 
+function trashUrl(id) {
+  const ticket = assetsCache.trashTickets[id];
+  return ticket
+    ? API_ROOT + "/api/media/" + encodeURIComponent(id) + "?ticket=" + encodeURIComponent(ticket)
+    : "";
+}
+
 function route() {
   return location.hash.replace(/^#\/?/, "").split("/").filter(Boolean);
 }
@@ -106,6 +117,7 @@ function shell(content, active = "") {
 
   if (currentUser?.role === "admin") {
     nav.push(["family-access", "Family Access"]);
+    nav.push(["trash", "Trash"]);
   }
 
   if (currentUser?.role !== "viewer") {
@@ -195,7 +207,7 @@ async function logout() {
   sessionStorage.removeItem(TOKEN_KEY);
   currentUser = null;
   memoriesCache = null;
-  assetsCache = { mediaTickets: {}, recollectionTickets: {}, scanTickets: {} };
+  assetsCache = { mediaTickets: {}, recollectionTickets: {}, scanTickets: {}, trashTickets: {} };
   renderLogin();
 }
 
@@ -517,7 +529,10 @@ async function renderMemoryEdit(id) {
                 ` : ""}
                 <div class="media-editor-actions">
                   <button class="button button-secondary" type="submit">Save media details</button>
-                  <button class="button danger-button" type="button" data-archive-media="${item.id}">Archive from Memory</button>
+                  <button class="button danger-button" type="button" data-archive-media="${item.id}">Remove from Memory</button>
+                  ${currentUser?.role === "admin"
+                    ? `<button class="button trash-button" type="button" data-trash-media="${item.id}">Move to Trash</button>`
+                    : ""}
                 </div>
                 <div class="media-editor-message"></div>
               </form>
@@ -602,7 +617,7 @@ async function renderMemoryEdit(id) {
   document.querySelectorAll("[data-archive-media]").forEach(button => {
     button.addEventListener("click", async () => {
       const mediaId = button.dataset.archiveMedia;
-      if (!window.confirm("Hide this media from the Memory? The original file will remain preserved.")) return;
+      if (!window.confirm("Remove this media from the visible Memory? The original file will remain preserved.")) return;
       button.disabled = true;
 
       try {
@@ -611,7 +626,25 @@ async function renderMemoryEdit(id) {
         });
         await renderMemoryEdit(id);
       } catch (error) {
-        window.alert(error.message || "Could not archive media.");
+        window.alert(error.message || "Could not remove media from the Memory.");
+        button.disabled = false;
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-trash-media]").forEach(button => {
+    button.addEventListener("click", async () => {
+      const mediaId = button.dataset.trashMedia;
+      if (!window.confirm("Move this media to Trash? It will disappear from normal browsing but can still be restored by an admin.")) return;
+      button.disabled = true;
+
+      try {
+        await api("/edit/memories/" + encodeURIComponent(id) + "/media/" + encodeURIComponent(mediaId) + "/trash", {
+          method: "POST"
+        });
+        await renderMemoryEdit(id);
+      } catch (error) {
+        window.alert(error.message || "Could not move media to Trash.");
         button.disabled = false;
       }
     });
@@ -1290,6 +1323,107 @@ async function renderCurate() {
   });
 }
 
+async function renderTrash() {
+  if (currentUser?.role !== "admin") {
+    location.hash = "#/memories";
+    return;
+  }
+
+  shell('<div class="loading">Opening Trash…</div>', "trash");
+  const { items } = await api("/trash");
+  await refreshTickets([], [], [], items.map(item => item.id));
+
+  shell(`
+    <section class="hero">
+      <p class="eyebrow">ADMIN TRASH</p>
+      <h1>Deleted family media</h1>
+      <p>Items here are hidden from normal family browsing. Restore them if needed, or permanently delete them when you are certain the file should leave the archive.</p>
+    </section>
+
+    ${items.length ? `
+      <div class="trash-grid">
+        ${items.map(item => {
+          const src = trashUrl(item.id);
+          return `
+            <article class="trash-card" data-trash-card="${item.id}">
+              <div class="trash-preview">
+                ${item.kind === "photo"
+                  ? `<img src="${src}" alt="${escapeHtml(item.caption || item.originalFilename)}" loading="lazy" />`
+                  : item.kind === "video"
+                    ? `<video src="${src}" controls preload="metadata"></video>`
+                    : `<audio src="${src}" controls preload="metadata"></audio>`
+                }
+              </div>
+              <div class="trash-copy">
+                <p class="eyebrow">${escapeHtml(item.memoryTitle)}</p>
+                <h2>${escapeHtml(item.caption || item.originalFilename)}</h2>
+                <p class="meta">Moved to Trash ${escapeHtml(new Date(item.trashedAt).toLocaleString())}${item.trashedBy ? " by " + escapeHtml(item.trashedBy) : ""}</p>
+                <div class="trash-actions">
+                  <button class="button button-secondary" data-restore-trash="${item.id}">Restore</button>
+                  <button class="button danger-button" data-delete-trash="${item.id}" data-filename="${escapeHtml(item.originalFilename)}">Delete permanently</button>
+                </div>
+                <div class="trash-message"></div>
+              </div>
+            </article>
+          `;
+        }).join("")}
+      </div>
+    ` : '<div class="empty">Trash is empty.</div>'}
+  `, "trash");
+
+  document.querySelectorAll("[data-restore-trash]").forEach(button => {
+    button.addEventListener("click", async () => {
+      const id = button.dataset.restoreTrash;
+      const card = button.closest(".trash-card");
+      const message = card.querySelector(".trash-message");
+      button.disabled = true;
+
+      try {
+        await api("/trash/" + encodeURIComponent(id) + "/restore", {
+          method: "POST"
+        });
+        await renderTrash();
+      } catch (error) {
+        message.innerHTML = '<div class="error">' + escapeHtml(error.message || "Could not restore this item.") + '</div>';
+        button.disabled = false;
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-delete-trash]").forEach(button => {
+    button.addEventListener("click", async () => {
+      const id = button.dataset.deleteTrash;
+      const filename = button.dataset.filename || "this file";
+      const card = button.closest(".trash-card");
+      const message = card.querySelector(".trash-message");
+
+      const confirmation = window.prompt(
+        "Permanent deletion cannot be undone. Type DELETE to permanently remove " + filename
+      );
+
+      if (confirmation !== "DELETE") return;
+
+      button.disabled = true;
+      message.innerHTML = "";
+
+      try {
+        const result = await api("/trash/" + encodeURIComponent(id), {
+          method: "DELETE"
+        });
+
+        if (result.fileCleanupWarning) {
+          window.alert("The archive record was deleted, but a leftover file may need cleanup during Archive Health.");
+        }
+
+        await renderTrash();
+      } catch (error) {
+        message.innerHTML = '<div class="error">' + escapeHtml(error.message || "Could not permanently delete this item.") + '</div>';
+        button.disabled = false;
+      }
+    });
+  });
+}
+
 async function renderScans() {
   if (currentUser?.role !== "admin" && currentUser?.role !== "curator") {
     location.hash = "#/memories";
@@ -1852,6 +1986,7 @@ async function render() {
     if (section === "memories" && parts[1]) return await renderMemory(parts[1]);
     if (section === "timeline") return await renderTimeline();
     if (section === "curate") return await renderCurate();
+    if (section === "trash") return await renderTrash();
     if (section === "scans" && parts[1]) return await renderScanBatch(parts[1]);
     if (section === "scans") return await renderScans();
     if (section === "family-access") return await renderFamilyAccess();

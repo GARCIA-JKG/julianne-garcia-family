@@ -402,3 +402,18 @@ button,input{font:inherit}
 .private-relations strong,.private-relations span{display:block}
 .private-relations span{margin-top:2px;color:var(--muted);font-size:10px;text-transform:capitalize}
 @media(max-width:700px){.detail-toolbar{align-items:flex-start;flex-direction:column}.history-row{flex-direction:column}.media-editor-grid{grid-template-columns:1fr}}
+
+
+/* Admin media Trash */
+
+.trash-button{color:#762c24;background:#f7e9e5;border-color:#b98c83}
+.trash-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px}
+.trash-card{overflow:hidden;background:rgba(255,250,240,.78);border:1px solid var(--line)}
+.trash-preview{min-height:240px;display:grid;place-items:center;background:#252925}
+.trash-preview img,.trash-preview video{width:100%;height:280px;object-fit:contain}
+.trash-preview audio{width:calc(100% - 28px)}
+.trash-copy{padding:18px}
+.trash-copy h2{margin:0 0 8px;font:500 23px Georgia,serif;overflow-wrap:anywhere}
+.trash-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.trash-message{margin-top:12px}
+@media(max-width:640px){.trash-grid{grid-template-columns:1fr}.trash-preview img,.trash-preview video{height:240px}}

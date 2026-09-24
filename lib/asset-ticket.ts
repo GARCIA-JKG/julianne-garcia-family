@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-type AssetKind = "media" | "recollection" | "scan";
+type AssetKind = "media" | "recollection" | "scan" | "trash";
 
 type TicketPayload = {
   kind: AssetKind;
