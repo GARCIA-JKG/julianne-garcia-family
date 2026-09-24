@@ -417,3 +417,32 @@ button,input{font:inherit}
 .trash-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
 .trash-message{margin-top:12px}
 @media(max-width:640px){.trash-grid{grid-template-columns:1fr}.trash-preview img,.trash-preview video{height:240px}}
+
+
+/* Archive Health */
+
+.archive-health-hero{max-width:940px}
+.health-banner{margin-top:24px;padding:14px 16px;display:flex;justify-content:space-between;gap:18px;align-items:center;border:1px solid var(--line);background:rgba(255,250,240,.72)}
+.health-banner strong{font:500 22px Georgia,serif}
+.health-banner span{color:var(--muted);font-size:12px}
+.health-good{border-color:#9ab7a0;background:#e6f0e7}
+.health-warn{border-color:#cdbb83;background:#f5efd8}
+.health-bad{border-color:#cf9e97;background:#f7e3df}
+.health-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.health-card{padding:24px;background:rgba(255,250,240,.72);border:1px solid var(--line)}
+.health-card-wide{grid-column:1/-1}
+.health-card h2{margin:0 0 16px;font:500 30px Georgia,serif}
+.health-stat-list{display:grid;gap:9px;margin-bottom:14px}
+.health-stat-list span{display:flex;justify-content:space-between;gap:18px;padding-bottom:7px;color:var(--muted);border-bottom:1px solid rgba(214,203,185,.7);font-size:12px}
+.health-stat-list strong{color:var(--ink);font-size:13px}
+.backup-status-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.backup-status-grid>div{padding:16px;background:#fffdf8;border:1px solid var(--line)}
+.backup-status-grid span,.backup-status-grid strong,.backup-status-grid small{display:block}
+.backup-status-grid span{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+.backup-status-grid strong{margin:5px 0;font:500 18px Georgia,serif}
+.backup-status-grid small{color:var(--muted);overflow-wrap:anywhere}
+.health-details{margin-top:34px;padding:24px;background:rgba(255,250,240,.58);border:1px solid var(--line)}
+.health-details h2{margin:0 0 20px;font:500 31px Georgia,serif}
+.health-details h3{margin:20px 0 8px}
+.health-details code{display:block;padding:14px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:#2a2e2a;color:#eee6da;font-size:11px}
+@media(max-width:760px){.health-grid{grid-template-columns:1fr}.health-card-wide{grid-column:auto}.backup-status-grid{grid-template-columns:1fr}.health-banner{align-items:flex-start;flex-direction:column}}
