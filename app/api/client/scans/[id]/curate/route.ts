@@ -59,8 +59,9 @@ export async function POST(
         storage_path: string;
         mime_type: string;
         bytes: string;
+        rotation_degrees: number;
       }>(
-        `SELECT id, original_filename, storage_path, mime_type, bytes::text
+        `SELECT id, original_filename, storage_path, mime_type, bytes::text, rotation_degrees
          FROM import_items
          WHERE batch_id = $1
            AND id = ANY($2::uuid[])
@@ -98,9 +99,9 @@ export async function POST(
         const item = selected.rows[index];
         await client.query(
           `INSERT INTO media (
-            memory_id, kind, original_filename, storage_path, mime_type, bytes, uploaded_by, sort_order
+            memory_id, kind, original_filename, storage_path, mime_type, bytes, uploaded_by, sort_order, rotation_degrees
           )
-          VALUES ($1,'photo',$2,$3,$4,$5,$6,$7)`,
+          VALUES ($1,'photo',$2,$3,$4,$5,$6,$7,$8)`,
           [
             memoryId,
             item.original_filename,
@@ -108,7 +109,8 @@ export async function POST(
             item.mime_type,
             Number(item.bytes),
             user.id,
-            index
+            index,
+            item.rotation_degrees
           ]
         );
       }
