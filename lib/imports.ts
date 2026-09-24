@@ -17,6 +17,7 @@ export type ScanItem = {
   mimeType: string;
   bytes: number;
   sortOrder: number;
+  rotationDegrees: number;
   status: "pending" | "curated" | "skipped";
   curatedMemoryId: string | null;
 };
@@ -82,6 +83,7 @@ export async function getScanBatch(id: string) {
     mime_type: string;
     bytes: string;
     sort_order: number;
+    rotation_degrees: number;
     status: ScanItem["status"];
     curated_memory_id: string | null;
   }>(
@@ -91,6 +93,7 @@ export async function getScanBatch(id: string) {
        mime_type,
        bytes::text,
        sort_order,
+       rotation_degrees,
        status,
        curated_memory_id
      FROM import_items
@@ -111,6 +114,7 @@ export async function getScanBatch(id: string) {
       mimeType: row.mime_type,
       bytes: Number(row.bytes),
       sortOrder: row.sort_order,
+      rotationDegrees: row.rotation_degrees,
       status: row.status,
       curatedMemoryId: row.curated_memory_id
     }))
