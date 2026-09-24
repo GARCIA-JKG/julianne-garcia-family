@@ -67,10 +67,10 @@ services:
         tmp="/backups/database/.julianne-family-${stamp}.dump.tmp"
         final="/backups/database/julianne-family-${stamp}.dump"
         trap 'rm -f "$tmp"' EXIT
-        PGPASSWORD="$POSTGRES_PASSWORD" pg_dump \
-          -h "$DATABASE_HOST" \
-          -U "$POSTGRES_USER" \
-          -d "$POSTGRES_DB" \
+        PGPASSWORD="${POSTGRES_PASSWORD}" pg_dump \
+          -h "${DATABASE_HOST}" \
+          -U "${POSTGRES_USER}" \
+          -d "${POSTGRES_DB}" \
           -Fc \
           -f "$tmp"
         pg_restore --list "$tmp" >/dev/null
