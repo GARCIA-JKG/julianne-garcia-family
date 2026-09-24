@@ -12,6 +12,7 @@ export type TrashItem = {
   mimeType: string | null;
   bytes: number | null;
   caption: string | null;
+  rotationDegrees: number;
   trashedAt: string;
   trashedBy: string | null;
 };
@@ -26,6 +27,7 @@ export async function listTrashedMedia(): Promise<TrashItem[]> {
     mime_type: string | null;
     bytes: string | null;
     caption: string | null;
+    rotation_degrees: number;
     trashed_at: string;
     trashed_by_name: string | null;
   }>(
@@ -38,6 +40,7 @@ export async function listTrashedMedia(): Promise<TrashItem[]> {
        md.mime_type,
        md.bytes::text,
        md.caption,
+       md.rotation_degrees,
        md.trashed_at,
        u.display_name AS trashed_by_name
      FROM media md
@@ -56,6 +59,7 @@ export async function listTrashedMedia(): Promise<TrashItem[]> {
     mimeType: row.mime_type,
     bytes: row.bytes === null ? null : Number(row.bytes),
     caption: row.caption,
+    rotationDegrees: row.rotation_degrees,
     trashedAt: new Date(row.trashed_at).toISOString(),
     trashedBy: row.trashed_by_name
   }));
