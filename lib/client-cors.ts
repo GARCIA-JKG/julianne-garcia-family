@@ -9,7 +9,7 @@ export function clientOrigin() {
 export function withClientCors(response: NextResponse) {
   response.headers.set("Access-Control-Allow-Origin", clientOrigin());
   response.headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type");
-  response.headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  response.headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
   response.headers.set("Vary", "Origin");
   return response;
 }
