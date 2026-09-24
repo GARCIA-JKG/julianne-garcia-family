@@ -63,6 +63,64 @@ export async function PUT(
   }
 }
 
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string; mediaId: string }> }
+) {
+  const user = await getBearerUser(request);
+  if (!user) return clientJson({ error: "Please sign in." }, { status: 401 });
+  if (!canCurate(user.role)) {
+    return clientJson({ error: "Curator access required." }, { status: 403 });
+  }
+
+  try {
+    const { id, mediaId } = await params;
+    const body = await request.json().catch(() => ({}));
+    const action =
+      body.action === "left"
+        ? "left"
+        : body.action === "right"
+          ? "right"
+          : body.action === "reset"
+            ? "reset"
+            : null;
+
+    if (!action) {
+      return clientJson({ error: "Invalid rotation action." }, { status: 400 });
+    }
+
+    await captureMemorySnapshot(id, user.id, "Rotated photo");
+
+    const result = await query<{ rotation_degrees: number }>(
+      `UPDATE media
+       SET rotation_degrees = CASE
+         WHEN $1 = 'left' THEN (rotation_degrees + 270) % 360
+         WHEN $1 = 'right' THEN (rotation_degrees + 90) % 360
+         ELSE 0
+       END
+       WHERE id = $2
+         AND memory_id = $3
+         AND kind = 'photo'
+         AND archived = false
+         AND trashed_at IS NULL
+       RETURNING rotation_degrees`,
+      [action, mediaId, id]
+    );
+
+    if (!result.rows[0]) {
+      return clientJson({ error: "Photo not found." }, { status: 404 });
+    }
+
+    return clientJson({
+      ok: true,
+      rotationDegrees: result.rows[0].rotation_degrees
+    });
+  } catch (error) {
+    console.error("client media rotation failed", error);
+    return clientJson({ error: "Could not rotate photo." }, { status: 500 });
+  }
+}
+
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string; mediaId: string }> }
