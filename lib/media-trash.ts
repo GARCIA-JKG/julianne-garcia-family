@@ -270,17 +270,27 @@ export async function permanentlyDeleteTrashedMedia(mediaId: string) {
     client.release();
   }
 
-  await safeUnlink(
-    storagePath,
-    process.env.MEDIA_UPLOAD_ROOT ?? "/media/uploads"
-  );
+  let fileCleanupWarning = false;
 
-  if (derivativePath) {
+  try {
     await safeUnlink(
-      derivativePath,
-      process.env.MEDIA_PROCESSED_ROOT ?? "/media/processed"
+      storagePath,
+      process.env.MEDIA_UPLOAD_ROOT ?? "/media/uploads"
+    );
+
+    if (derivativePath) {
+      await safeUnlink(
+        derivativePath,
+        process.env.MEDIA_PROCESSED_ROOT ?? "/media/processed"
+      );
+    }
+  } catch (error) {
+    fileCleanupWarning = true;
+    console.error(
+      "permanent media delete left file cleanup work for Archive Health",
+      error
     );
   }
 
-  return { ok: true as const };
+  return { ok: true as const, fileCleanupWarning };
 }
