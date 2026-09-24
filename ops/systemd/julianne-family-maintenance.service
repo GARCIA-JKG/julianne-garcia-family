@@ -1,0 +1,13 @@
+[Unit]
+Description=Julianne Garcia Family archive backup and integrity maintenance
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=nuc
+WorkingDirectory=/srv/julianne-garcia-family/source
+ExecStart=/usr/bin/docker compose --env-file /srv/julianne-garcia-family/.env -p julianne-garcia-family -f /srv/julianne-garcia-family/source/compose.yml --profile maintenance run --rm db-backup
+ExecStart=/usr/bin/docker compose --env-file /srv/julianne-garcia-family/.env -p julianne-garcia-family -f /srv/julianne-garcia-family/source/compose.yml --profile maintenance run --rm archive-check
+TimeoutStartSec=infinity
