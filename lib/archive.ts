@@ -8,6 +8,7 @@ export type MediaItem = {
   mimeType: string | null;
   caption: string | null;
   sortOrder: number;
+  rotationDegrees: number;
 };
 
 export type ArchiveMemory = {
@@ -78,7 +79,8 @@ const memorySelect = `
             'originalFilename', md.original_filename,
             'mimeType', md.mime_type,
             'caption', md.caption,
-            'sortOrder', md.sort_order
+            'sortOrder', md.sort_order,
+            'rotationDegrees', md.rotation_degrees
           )
           ORDER BY
             CASE WHEN md.id = m.cover_media_id THEN 0 ELSE 1 END,
@@ -88,6 +90,7 @@ const memorySelect = `
         FROM media md
         WHERE md.memory_id = m.id
           AND md.archived = false
+          AND md.trashed_at IS NULL
       ),
       '[]'::json
     ) AS media
