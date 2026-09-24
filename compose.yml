@@ -83,8 +83,7 @@ services:
     mem_limit: 512m
 
   archive-check:
-    build:
-      context: .
+    image: julianne-family-app:latest
     restart: "no"
     profiles: ["maintenance"]
     depends_on:
@@ -113,6 +112,7 @@ services:
     cpus: 0.5
     mem_limit: 512m
   web:
+    image: julianne-family-app:latest
     build:
       context: .
     restart: unless-stopped
