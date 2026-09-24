@@ -118,6 +118,7 @@ function shell(content, active = "") {
   if (currentUser?.role === "admin") {
     nav.push(["family-access", "Family Access"]);
     nav.push(["trash", "Trash"]);
+    nav.push(["archive-health", "Archive Health"]);
   }
 
   if (currentUser?.role !== "viewer") {
@@ -1323,6 +1324,146 @@ async function renderCurate() {
   });
 }
 
+function formatHealthBytes(bytes) {
+  if (bytes === null || bytes === undefined) return "—";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = Number(bytes);
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return value.toFixed(unit >= 3 ? 1 : 0) + " " + units[unit];
+}
+
+function healthDate(value) {
+  return value ? new Date(value).toLocaleString() : "Not yet";
+}
+
+async function renderArchiveHealth() {
+  if (currentUser?.role !== "admin") {
+    location.hash = "#/memories";
+    return;
+  }
+
+  shell('<div class="loading">Checking the family archive…</div>', "archive-health");
+  const { health } = await api("/archive-health");
+
+  const state =
+    health.integrity.missingFiles > 0 || health.integrity.databaseIssues > 0
+      ? "Needs attention"
+      : health.integrity.orphanedFiles > 0
+        ? "Review recommended"
+        : "Healthy";
+
+  const backupFresh =
+    health.backups.database.ageHours !== null &&
+    health.backups.database.ageHours <= 36;
+
+  shell(`
+    <section class="hero archive-health-hero">
+      <p class="eyebrow">ARCHIVE HEALTH</p>
+      <h1>Keep the family archive trustworthy.</h1>
+      <p>Live checks across the database, family media filesystem, backup folder, and nightly integrity report. Nothing is automatically deleted or repaired.</p>
+      <div class="health-banner ${state === "Healthy" ? "health-good" : state === "Needs attention" ? "health-bad" : "health-warn"}">
+        <strong>${escapeHtml(state)}</strong>
+        <span>Checked ${escapeHtml(new Date(health.checkedAt).toLocaleString())}</span>
+      </div>
+    </section>
+
+    <div class="health-grid">
+      <article class="health-card">
+        <p class="eyebrow">MEDIA</p>
+        <h2>${health.counts.photos.toLocaleString()} photos</h2>
+        <div class="health-stat-list">
+          <span><strong>${health.counts.videos.toLocaleString()}</strong> videos</span>
+          <span><strong>${health.counts.audio.toLocaleString()}</strong> audio files</span>
+          <span><strong>${health.counts.voiceRecollections.toLocaleString()}</strong> voice recollections</span>
+          <span><strong>${health.counts.trashedMedia.toLocaleString()}</strong> items in Trash</span>
+          <span><strong>${health.counts.memories.toLocaleString()}</strong> Memories</span>
+          <span><strong>${health.counts.people.toLocaleString()}</strong> people</span>
+        </div>
+      </article>
+
+      <article class="health-card">
+        <p class="eyebrow">CURATION</p>
+        <h2>${health.counts.pendingScans.toLocaleString()} scans waiting</h2>
+        <div class="health-stat-list">
+          <span><strong>${health.counts.pendingMemories}</strong> Memories waiting</span>
+          <span><strong>${health.counts.pendingRecollections}</strong> recollections waiting</span>
+          <span><strong>${health.counts.approvedMemories}</strong> approved Memories</span>
+        </div>
+        <a class="text-link" href="#/curate">Open curation queue →</a>
+      </article>
+
+      <article class="health-card">
+        <p class="eyebrow">STORAGE</p>
+        <h2>${formatHealthBytes(health.storage.archiveBytes)} family media</h2>
+        <div class="health-stat-list">
+          <span><strong>${formatHealthBytes(health.storage.availableBytes)}</strong> available</span>
+          <span><strong>${formatHealthBytes(health.storage.usedBytes)}</strong> disk used</span>
+          <span><strong>${formatHealthBytes(health.storage.totalBytes)}</strong> disk capacity</span>
+        </div>
+      </article>
+
+      <article class="health-card">
+        <p class="eyebrow">INTEGRITY</p>
+        <h2>${health.integrity.missingFiles === 0 && health.integrity.databaseIssues === 0 ? "Core checks passed" : "Review required"}</h2>
+        <div class="health-stat-list">
+          <span><strong>${health.integrity.missingFiles}</strong> missing referenced files</span>
+          <span><strong>${health.integrity.orphanedFiles}</strong> orphaned upload files</span>
+          <span><strong>${health.integrity.databaseIssues}</strong> database consistency issues</span>
+          <span><strong>${health.integrity.referencedFiles}</strong> referenced file paths checked</span>
+        </div>
+      </article>
+
+      <article class="health-card health-card-wide">
+        <p class="eyebrow">BACKUPS</p>
+        <h2>Database backup: ${backupFresh ? "Current" : "Needs setup or refresh"}</h2>
+        <div class="backup-status-grid">
+          <div>
+            <span>Latest database backup</span>
+            <strong>${escapeHtml(healthDate(health.backups.database.latestAt))}</strong>
+            <small>${escapeHtml(health.backups.database.latestFilename || "No verified .dump file found")}${health.backups.database.latestBytes !== null ? " · " + formatHealthBytes(health.backups.database.latestBytes) : ""}</small>
+          </div>
+          <div>
+            <span>Scheduled integrity scan</span>
+            <strong>${escapeHtml(healthDate(health.integrity.lastScheduledScan?.checkedAt || null))}</strong>
+            <small>${health.integrity.lastScheduledScan
+              ? health.integrity.lastScheduledScan.missingFiles + " missing · " + health.integrity.lastScheduledScan.orphanedFiles + " orphaned · " + health.integrity.lastScheduledScan.databaseIssues + " DB issues"
+              : "No scheduled report has run yet"}</small>
+          </div>
+          <div>
+            <span>Full media backup</span>
+            <strong>Not configured</strong>
+            <small>A second physical destination is still required.</small>
+          </div>
+        </div>
+      </article>
+    </div>
+
+    ${health.integrity.missingSamples.length || health.integrity.orphanedSamples.length ? `
+      <section class="health-details">
+        <p class="eyebrow">DETAILS</p>
+        <h2>Items to review</h2>
+        ${health.integrity.missingSamples.length ? `
+          <div>
+            <h3>Missing referenced files</h3>
+            <code>${escapeHtml(health.integrity.missingSamples.join("\n"))}</code>
+          </div>
+        ` : ""}
+        ${health.integrity.orphanedSamples.length ? `
+          <div>
+            <h3>Orphaned upload files</h3>
+            <p>These files exist under the managed upload folder but are not referenced by current archive metadata. Nothing is deleted automatically.</p>
+            <code>${escapeHtml(health.integrity.orphanedSamples.join("\n"))}</code>
+          </div>
+        ` : ""}
+      </section>
+    ` : ""}
+  `, "archive-health");
+}
+
 async function renderTrash() {
   if (currentUser?.role !== "admin") {
     location.hash = "#/memories";
@@ -1986,6 +2127,7 @@ async function render() {
     if (section === "memories" && parts[1]) return await renderMemory(parts[1]);
     if (section === "timeline") return await renderTimeline();
     if (section === "curate") return await renderCurate();
+    if (section === "archive-health") return await renderArchiveHealth();
     if (section === "trash") return await renderTrash();
     if (section === "scans" && parts[1]) return await renderScanBatch(parts[1]);
     if (section === "scans") return await renderScans();
