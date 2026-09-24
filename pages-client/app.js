@@ -1521,7 +1521,7 @@ async function renderTrash() {
             <article class="trash-card" data-trash-card="${item.id}">
               <div class="trash-preview">
                 ${item.kind === "photo"
-                  ? `<img src="${src}" alt="${escapeHtml(item.caption || item.originalFilename)}" loading="lazy" />`
+                  ? `<img src="${src}" alt="${escapeHtml(item.caption || item.originalFilename)}" loading="lazy" style="${photoRotationStyle(item)}" />`
                   : item.kind === "video"
                     ? `<video src="${src}" controls preload="metadata"></video>`
                     : `<audio src="${src}" controls preload="metadata"></audio>`
